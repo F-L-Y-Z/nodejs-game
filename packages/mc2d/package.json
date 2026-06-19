@@ -1,0 +1,15 @@
+{
+  "name": "@repo/mc2d",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/*"
+  },
+  "scripts": {
+    "build": "echo \"no build needed\"",
+    "dev": "node src/index.js",
+    "typecheck": "echo \"skip typecheck\"",
+    "clean": "echo \"clean\""
+  }
+}

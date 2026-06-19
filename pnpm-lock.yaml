@@ -67,6 +67,12 @@ importers:
         specifier: ^4.22.4
         version: 4.22.4
 
+  apps/wx-mahjong:
+    dependencies:
+      '@repo/mc2d':
+        specifier: workspace:*
+        version: link:../../packages/mc2d
+
   packages/auth:
     dependencies:
       '@repo/shared':
@@ -78,6 +84,8 @@ importers:
   packages/db: {}
 
   packages/logger: {}
+
+  packages/mc2d: {}
 
   packages/metrics: {}
 
