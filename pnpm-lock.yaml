@@ -72,6 +72,10 @@ importers:
       '@repo/mc2d':
         specifier: workspace:*
         version: link:../../packages/mc2d
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
 
   packages/auth:
     dependencies:
@@ -827,8 +831,8 @@ packages:
     resolution: {integrity: sha512-4kmO/MdyUIkLIvTPr8VHLil4AtoKIoniWPIEk5+CDy0xnWC84azhSFmuJ7PxZdsYtiP5kEeQsORAVIeMgxT+Hw==}
     hasBin: true
 
-  nanoid@3.3.12:
-    resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
+  nanoid@3.3.13:
+    resolution: {integrity: sha512-sPdqC6ByMVVGvF1ynvvMo0/o+oD1VX7DaHhijt1bFgjvBkHBib4t49GoNDhf2NDta4oeUNlaGbSt5K7qjZ955Q==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -1096,7 +1100,7 @@ snapshots:
       '@colyseus/timer': 2.0.3
       '@standard-schema/spec': 1.1.0
       debug: 4.4.3
-      nanoid: 3.3.12
+      nanoid: 3.3.13
     optionalDependencies:
       '@colyseus/ws-transport': 0.17.13(@colyseus/core@0.17.43)(express@5.2.1)
       '@pm2/io': 6.1.0
@@ -1807,7 +1811,7 @@ snapshots:
       '@msgpackr-extract/msgpackr-extract-win32-x64': 3.0.4
     optional: true
 
-  nanoid@3.3.12: {}
+  nanoid@3.3.13: {}
 
   negotiator@1.0.0: {}
 

@@ -3,7 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js",
+    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js --watch",
+    "typecheck": "echo \"skip typecheck\"",
+    "clean": "rm -f public/game.js"
+  },
   "dependencies": {
     "@repo/mc2d": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

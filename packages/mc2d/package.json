@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/*"
+    ".": "./src/index.js",
+    "./*": "./src/*"
   },
   "scripts": {
     "build": "echo \"no build needed\"",
