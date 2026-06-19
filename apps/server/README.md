@@ -9,6 +9,7 @@
 - 基于 `@colyseus/schema` 的状态同步
 - 玩家加入、离开、移动消息处理
 - HTTP 健康检查：`GET /health`
+- 微信小游戏登录：`POST /auth/wechat/minigame/login`
 - Colyseus Monitor：`/colyseus`
 - 基于 `@repo/auth` 的 Room 准入校验
 - 基于 `@repo/shared` 的房间名和消息协议
@@ -21,6 +22,38 @@ npm run dev
 ```
 
 默认监听 `http://localhost:2567`。
+
+## 环境变量
+
+```bash
+PORT=2567
+WECHAT_MINIGAME_APP_ID=your-appid
+WECHAT_MINIGAME_APP_SECRET=your-secret
+AUTH_TOKEN_SECRET=replace-with-a-long-random-secret
+AUTH_TOKEN_TTL_SECONDS=604800
+AUTH_ALLOW_DEV_TOKENS=true
+```
+
+生产环境必须配置 `AUTH_TOKEN_SECRET`。`AUTH_ALLOW_DEV_TOKENS` 默认开启，方便本地继续使用 `dev:user-1`；生产环境建议设置为 `false`。
+
+## 微信小游戏登录
+
+客户端先调用 `wx.login` 拿到临时 `code`，再交给服务端换取登录态：
+
+```ts
+const loginResult = await wx.login();
+const response = await fetch("http://localhost:2567/auth/wechat/minigame/login", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    code: loginResult.code,
+    name: "player",
+  }),
+});
+const { token } = await response.json();
+```
+
+服务端会调用微信 `jscode2session`，用返回的 `openid` 生成内部用户 ID，并签发房间连接使用的服务端 token。
 
 ## 脚本
 
@@ -38,7 +71,7 @@ import { Client } from "colyseus.js";
 
 const client = new Client("ws://localhost:2567");
 const room = await client.joinOrCreate("game_room", {
-  token: "dev:user-1",
+  token,
   name: "player",
 });
 

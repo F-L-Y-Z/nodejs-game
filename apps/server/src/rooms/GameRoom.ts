@@ -2,6 +2,7 @@ import type { Client } from 'colyseus';
 import { Room } from 'colyseus';
 import type { AuthContext } from '@repo/auth';
 import { createDevTokenVerifier } from '@repo/auth/server';
+import { readBooleanEnv } from '@repo/config';
 import {
   CLIENT_MESSAGES,
   SERVER_MESSAGES,
@@ -11,13 +12,15 @@ import {
   type PlayerLeftMessage,
 } from '@repo/shared';
 import { clampNumber, requireString } from '@repo/validators';
+import { authTokenService } from '../auth/service.js';
 import { GameState, Player } from '../schemas/GameState.js';
 
 const MAX_SPEED = 1;
 const WORLD_LIMIT = 500;
-const verifyToken = createDevTokenVerifier();
+const verifyDevToken = createDevTokenVerifier();
+const allowDevTokens = readBooleanEnv('AUTH_ALLOW_DEV_TOKENS', true);
 
-export class GameRoom extends Room<GameState> {
+export class GameRoom extends Room<{ state: GameState }> {
   maxClients = 16;
 
   onCreate(): void {
@@ -36,7 +39,15 @@ export class GameRoom extends Room<GameState> {
   }
 
   async onAuth(_client: Client, options: JoinRoomOptions = {}) {
-    return verifyToken(options.token);
+    try {
+      return await authTokenService.verify(options.token);
+    } catch (error) {
+      if (!allowDevTokens) {
+        throw error;
+      }
+
+      return verifyDevToken(options.token);
+    }
   }
 
   onJoin(client: Client, options: JoinRoomOptions = {}, auth: AuthContext): void {
@@ -63,7 +74,7 @@ export class GameRoom extends Room<GameState> {
     const deltaSeconds = deltaTime / 1000;
     this.state.elapsedTime += deltaSeconds;
 
-    this.state.players.forEach((player) => {
+    this.state.players.forEach((player: Player) => {
       player.x = clampNumber(player.x + player.vx * 180 * deltaSeconds, -WORLD_LIMIT, WORLD_LIMIT);
       player.y = clampNumber(player.y + player.vy * 180 * deltaSeconds, -WORLD_LIMIT, WORLD_LIMIT);
     });

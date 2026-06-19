@@ -8,6 +8,8 @@ import { Server } from 'colyseus';
 import cors from 'cors';
 import express from 'express';
 import { createServer } from 'node:http';
+import { registerAuthRoutes } from './auth/routes.js';
+import { authTokenService } from './auth/service.js';
 import { GameRoom } from './rooms/GameRoom.js';
 
 const port = readNumberEnv('PORT', 2567);
@@ -21,6 +23,7 @@ registerHealthRoute(app, {
   service: SERVICE_NAME,
   getUptime: () => process.uptime(),
 });
+registerAuthRoutes(app, authTokenService);
 
 const httpServer = createServer(app);
 
