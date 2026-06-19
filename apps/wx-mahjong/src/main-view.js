@@ -1,18 +1,71 @@
-import { Button, Container, anchor } from '@repo/mc2d';
+import { Button, Container, Text, anchor } from '@repo/mc2d';
+import { getCachedAuthSession, loginWechatMiniGame } from './auth/wechat-login.js';
 import MainController from './main-controller.js';
 import BoardGraphic, { getActionLayout, getHandHitRects } from './view/board-graphic.js';
 
 export default class MainView extends Container {
-  constructor(assetManager) {
+  constructor(app) {
     super();
 
+    this.app = app;
     this.state = null;
+    this.authStatus = 'idle';
+    this.authSession = getCachedAuthSession(app);
     this.controls = [];
     this.controlSizeKey = '';
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
-    this.board = this.addChild(new BoardGraphic(assetManager));
+    this.board = this.addChild(new BoardGraphic(app.assets));
     this.board.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
+    this.authText = this.addChild(
+      new Text('', {
+        fillStyle: '#fff',
+        fontSize: 13,
+        textAlign: 'left',
+        strokeStyle: 'rgba(0,0,0,0.6)',
+        lineWidth: 3,
+      }),
+    );
+    this.authText.touchEnabled = true;
+    this.authText.setLayout(anchor({ anchor: 'top-left', x: 12, y: 8, width: 220, height: 24 }));
+    this.authText.on('tap', () => {
+      if (this.authStatus === 'failed') this.startLogin();
+    });
     this.controller = new MainController(this);
+    if (this.authSession) {
+      this.controller.setAuthSession(this.authSession);
+      this.setAuthStatus('ready');
+    } else {
+      this.setAuthStatus('idle');
+    }
+  }
+
+  async startLogin() {
+    this.setAuthStatus('loading');
+    try {
+      const authSession = await loginWechatMiniGame(this.app);
+      this.authSession = authSession;
+      this.controller.setAuthSession(authSession);
+      this.setAuthStatus('ready');
+    } catch (error) {
+      this.setAuthStatus('failed', error);
+    }
+  }
+
+  setAuthStatus(status, error = null) {
+    this.authStatus = status;
+
+    if (status === 'loading') this.authText.text = '微信登录中...';
+    else if (status === 'ready') this.authText.text = `已登录 ${this.getDisplayName()}`;
+    else if (status === 'failed') this.authText.text = '登录失败，点击重试';
+    else this.authText.text = '未登录';
+
+    if (error) console.warn('[wx-mahjong] wechat login failed', error);
+    this.invalidatePaint();
+  }
+
+  getDisplayName() {
+    const user = this.authSession && this.authSession.user;
+    return (user && user.displayName) || 'player';
   }
 
   renderState(state) {

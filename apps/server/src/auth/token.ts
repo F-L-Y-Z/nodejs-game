@@ -11,13 +11,14 @@ type TokenPayload = {
   sub: string;
   name: string;
   roles: AuthContext['roles'];
+  gameId?: string;
   provider: 'wechat_minigame';
   iat: number;
   exp: number;
 };
 
 export type AuthTokenService = {
-  sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles'>): string;
+  sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId'>): string;
   verify: TokenVerifier;
 };
 
@@ -35,12 +36,13 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
     logger.warn('AUTH_TOKEN_SECRET is not set; using development token secret.');
   }
 
-  function sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles'>): string {
+  function sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId'>): string {
     const now = Math.floor(Date.now() / 1000);
     const payload: TokenPayload = {
       sub: context.userId,
       name: context.displayName,
       roles: context.roles,
+      gameId: context.gameId,
       provider: 'wechat_minigame',
       iat: now,
       exp: now + ttlSeconds,
@@ -79,6 +81,7 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
       userId: payload.sub,
       displayName: payload.name,
       roles: payload.roles,
+      gameId: payload.gameId,
     };
   }
 
@@ -111,6 +114,7 @@ function parsePayload(encodedPayload: string): TokenPayload {
       typeof value.name !== 'string' ||
       !Array.isArray(value.roles) ||
       !value.roles.every((role) => role === 'player' || role === 'admin' || role === 'guest') ||
+      (value.gameId !== undefined && typeof value.gameId !== 'string') ||
       value.provider !== 'wechat_minigame' ||
       typeof value.iat !== 'number' ||
       typeof value.exp !== 'number'

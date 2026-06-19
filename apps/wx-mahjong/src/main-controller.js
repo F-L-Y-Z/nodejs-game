@@ -3,7 +3,12 @@ import MahjongServer from './server/mahjong-server.js'
 export default class MainController {
   constructor(view) {
     this.view = view
+    this.authSession = null
     this.restart()
+  }
+
+  setAuthSession(authSession) {
+    this.authSession = authSession
   }
 
   restart() {

@@ -1,3 +1,4 @@
+import './env.js';
 import { monitor } from '@colyseus/monitor';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { readNumberEnv } from '@repo/config';

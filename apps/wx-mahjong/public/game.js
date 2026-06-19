@@ -1347,6 +1347,59 @@
     }));
   }
 
+  // src/auth/wechat-login.js
+  var DEFAULT_SERVER_BASE_URL = "http://localhost:2567";
+  var DEFAULT_GAME_ID = "mahjong";
+  var AUTH_STORAGE_KEY = "wxMahjong.authSession";
+  function getCachedAuthSession(app2, options = {}) {
+    try {
+      const gameId = getGameId(options);
+      const session = app2.platform.getStorage ? app2.platform.getStorage(AUTH_STORAGE_KEY) : null;
+      if (session && session.gameId === gameId && session.token && session.user) return session;
+    } catch (error) {
+    }
+    return null;
+  }
+  async function loginWechatMiniGame(app2, options = {}) {
+    const gameId = getGameId(options);
+    const loginInfo = await app2.platformLogin();
+    if (!loginInfo || !loginInfo.code) {
+      throw new Error("wx.login did not return a code.");
+    }
+    const response = await app2.request({
+      url: `${getServerBaseUrl(options)}/auth/wechat/minigame/login`,
+      method: "POST",
+      header: {
+        "content-type": "application/json"
+      },
+      data: {
+        gameId,
+        code: loginInfo.code,
+        name: options.name || "player"
+      }
+    });
+    const data = response && response.data;
+    if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data || !data.ok || !data.token) {
+      throw new Error(data && data.message || "Wechat login request failed.");
+    }
+    const session = {
+      gameId,
+      token: data.token,
+      user: data.user
+    };
+    if (app2.platform.setStorage) {
+      app2.platform.setStorage(AUTH_STORAGE_KEY, session);
+    }
+    return session;
+  }
+  function getServerBaseUrl(options) {
+    const value = options.serverBaseUrl || globalThis.__WX_MAHJONG_SERVER_URL__ || DEFAULT_SERVER_BASE_URL;
+    return String(value).replace(/\/+$/, "");
+  }
+  function getGameId(options) {
+    return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || DEFAULT_GAME_ID);
+  }
+
   // src/server/tiles.js
   var SUITS = [
     { key: "W", name: "\u4E07", color: "#c0392b" },
@@ -1805,9 +1858,13 @@
 
   // src/main-controller.js
   var MainController = class {
-    constructor(view) {
-      this.view = view;
+    constructor(view2) {
+      this.view = view2;
+      this.authSession = null;
       this.restart();
+    }
+    setAuthSession(authSession) {
+      this.authSession = authSession;
     }
     restart() {
       this.server = new MahjongServer((state) => this.view.renderState(state));
@@ -2231,15 +2288,62 @@
 
   // src/main-view.js
   var MainView = class extends Container {
-    constructor(assetManager) {
+    constructor(app2) {
       super();
+      this.app = app2;
       this.state = null;
+      this.authStatus = "idle";
+      this.authSession = getCachedAuthSession(app2);
       this.controls = [];
       this.controlSizeKey = "";
       this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
-      this.board = this.addChild(new BoardGraphic(assetManager));
+      this.board = this.addChild(new BoardGraphic(app2.assets));
       this.board.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
+      this.authText = this.addChild(
+        new Text("", {
+          fillStyle: "#fff",
+          fontSize: 13,
+          textAlign: "left",
+          strokeStyle: "rgba(0,0,0,0.6)",
+          lineWidth: 3
+        })
+      );
+      this.authText.touchEnabled = true;
+      this.authText.setLayout(anchor({ anchor: "top-left", x: 12, y: 8, width: 220, height: 24 }));
+      this.authText.on("tap", () => {
+        if (this.authStatus === "failed") this.startLogin();
+      });
       this.controller = new MainController(this);
+      if (this.authSession) {
+        this.controller.setAuthSession(this.authSession);
+        this.setAuthStatus("ready");
+      } else {
+        this.setAuthStatus("idle");
+      }
+    }
+    async startLogin() {
+      this.setAuthStatus("loading");
+      try {
+        const authSession = await loginWechatMiniGame(this.app);
+        this.authSession = authSession;
+        this.controller.setAuthSession(authSession);
+        this.setAuthStatus("ready");
+      } catch (error) {
+        this.setAuthStatus("failed", error);
+      }
+    }
+    setAuthStatus(status, error = null) {
+      this.authStatus = status;
+      if (status === "loading") this.authText.text = "\u5FAE\u4FE1\u767B\u5F55\u4E2D...";
+      else if (status === "ready") this.authText.text = `\u5DF2\u767B\u5F55 ${this.getDisplayName()}`;
+      else if (status === "failed") this.authText.text = "\u767B\u5F55\u5931\u8D25\uFF0C\u70B9\u51FB\u91CD\u8BD5";
+      else this.authText.text = "\u672A\u767B\u5F55";
+      if (error) console.warn("[wx-mahjong] wechat login failed", error);
+      this.invalidatePaint();
+    }
+    getDisplayName() {
+      const user = this.authSession && this.authSession.user;
+      return user && user.displayName || "player";
     }
     renderState(state) {
       this.state = state;
@@ -2310,5 +2414,7 @@
 
   // src/index.js
   var app = createWeChatApp({ fps: 60 });
-  app.start(new MainView(app.assets));
+  var view = new MainView(app);
+  app.start(view);
+  view.startLogin();
 })();
