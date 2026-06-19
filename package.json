@@ -1,0 +1,21 @@
+{
+  "name": "colyseus-node-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.3",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "turbo": "^2.6.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
