@@ -1,4 +1,6 @@
 import { Button, Container, anchor } from '@repo/mc2d';
+import LobbyView from './lobby-view.js';
+import LoginView from './login-view.js';
 import MainController from './main-controller.js';
 import BoardGraphic, { getActionLayout, getHandHitRects } from './view/board-graphic.js';
 
@@ -82,11 +84,35 @@ export default class MainView extends Container {
   }
 
   handleAction(action) {
-    if (action.key === 'pass') this.controller.pass();
+    if (action.key === 'ready') this.controller.ready();
+    else if (action.key === 'leave') this.controller.leave();
+    else if (action.key === 'pass') this.controller.pass();
     else if (action.key === 'peng') this.controller.peng();
     else if (action.key === 'gang') this.controller.gang();
     else if (action.key === 'hu') this.controller.hu();
     else if (action.key === 'restart') this.controller.restart();
     else if (action.key.indexOf('gang:') === 0) this.controller.gang(action.tile);
+  }
+
+  backToLobby(message = '') {
+    this.app.setRoot(new LobbyView(this.app, this.authSession, { message }));
+  }
+
+  backToLogin(message = '') {
+    const loginView = new LoginView(this.app, {
+      message,
+      onLogin: (authSession) => {
+        this.app.setRoot(new LobbyView(this.app, authSession));
+      },
+    });
+    this.app.setRoot(loginView);
+    loginView.startLogin(true);
+  }
+
+  showError(message) {
+    if (!this.state) return;
+    this.state = Object.assign({}, this.state, { message });
+    this.board.setState(this.state);
+    this.rebuildControls();
   }
 }

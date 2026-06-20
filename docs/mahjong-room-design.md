@@ -47,15 +47,46 @@
 type MahjongRoom = {
   id: string;
   ownerUserId: string;
-  status: 'playing' | 'closed';
+  status: 'waiting' | 'playing' | 'settling' | 'closed';
   table: MahjongTable;
   lastSeenByUserId: Map<string, number>;
+  readyUserIds: Set<string>;
   createdAt: number;
   updatedAt: number;
 };
 ```
 
-当前阶段创建后立即开局。`MahjongTable` 内部固定 4 个座位，真人入座后替换对应 AI；真人离开或超时后，AI 接管该座位。
+`MahjongTable` 内部固定 4 个座位，真人入座后替换对应 AI；真人离开或超时后，AI 接管该座位。
+
+当前阶段的状态流转：
+
+```txt
+waiting
+  -> 4 个座位 ready
+  -> playing
+  -> round-over
+  -> settling
+  -> 4 个座位 ready
+  -> playing
+
+任意状态
+  -> 所有真人离开/超时
+  -> closed
+```
+
+准备规则：
+
+- 真人座位必须由对应玩家点击准备。
+- AI 座位默认已准备。
+- 房间快照返回每个座位的 `isReady`，客户端在等待/结算阶段展示。
+- 只有 4 个座位全部 ready 后才开始或再开一局。
+
+退出规则：
+
+- 只允许在 `waiting` 和 `settling` 阶段主动退出。
+- 退出后真人座位释放，由 AI 接管。
+- 退出玩家的准备、活跃实例和房间索引会被清理。
+- 如果最后一名真人退出，房间进入 `closed` 并从内存移除。
 
 ## HTTP API
 
@@ -180,6 +211,15 @@ restart
 - 超过 120 秒未活跃的玩家视为离线。
 - 离线玩家从房间座位释放，当前座位由 AI 接管。
 - 空房间后续可以增加定时清理；当前 MVP 可在请求入口顺带清理过期玩家。
+
+## 重复登录
+
+- 服务端以 `userId` 作为玩家身份，同一个 `userId` 在同一房间只占一个座位。
+- 客户端每次启动牌桌会生成运行期 `clientId`，请求通过 `x-client-id` 传给服务端。
+- 同一账号再次进入原房间视为重连，恢复原座位，不新增座位。
+- 同一账号在另一设备进入原房间时，新的 `clientId` 接管该账号；旧 `clientId` 后续轮询或操作会收到 `account_replaced`。
+- 同一账号尝试加入其他房间时，服务端返回 `already_in_room`，客户端留在大厅显示错误。
+- 开发调试时，客户端大厅提供“重新登录”入口，会清除本地登录缓存并重新走登录流程。
 
 ## 后续演进
 

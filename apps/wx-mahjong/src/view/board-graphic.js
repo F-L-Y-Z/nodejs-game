@@ -27,6 +27,8 @@ function clamp(value, min, max) {
 function getActionItems(state) {
   const actions = [];
   const enabled = state && state.actions ? state.actions : {};
+  if (enabled.ready) actions.push({ key: 'ready', label: '准备' });
+  if (enabled.leave) actions.push({ key: 'leave', label: '退出' });
   if (enabled.pass) actions.push({ key: 'pass', label: '过' });
   if (enabled.peng) actions.push({ key: 'peng', label: '碰' });
   if (enabled.gang) actions.push({ key: 'gang', label: '杠' });
@@ -384,16 +386,27 @@ export default class BoardGraphic extends Graphic {
       const pos = PLAYER_POS[index];
       const active = state.currentPlayer === index && state.phase !== 'round-over';
       const color = active ? '#ffd86b' : '#dce8de';
+      const readyText =
+        state.roomStatus === 'waiting' || state.roomStatus === 'settling'
+          ? ` ${player.isReady ? '已准备' : '未准备'}`
+          : '';
       if (pos === 'bottom') {
-        drawText(ctx, player.name, x + Math.max(18, metrics.handX - 18), y + metrics.handY + metrics.tileH / 2, 13, color);
+        drawText(
+          ctx,
+          `${player.name}${readyText}`,
+          x + Math.max(18, metrics.handX - 18),
+          y + metrics.handY + metrics.tileH / 2,
+          13,
+          color,
+        );
       } else if (pos === 'top') {
-        drawText(ctx, `${player.name} ${player.handCount}张`, x + width / 2, y + metrics.tableTop - 16, 13, color);
+        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + width / 2, y + metrics.tableTop - 16, 13, color);
       } else if (pos === 'left') {
         const nameX = metrics.isLandscape ? metrics.tableLeft - 50 : 20;
-        drawText(ctx, `${player.name} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
+        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       } else if (pos === 'right') {
         const nameX = metrics.isLandscape ? metrics.tableRight + 50 : width - 20;
-        drawText(ctx, `${player.name} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
+        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       }
     });
   }

@@ -10,9 +10,9 @@ import {
   type MahjongActionMessage,
 } from '@repo/shared';
 import { requireString } from '@repo/validators';
-import { MahjongTable } from '../mahjong/MahjongTable.js';
+import { MahjongTable } from '../mahjong/mahjong-table.js';
 import { authTokenService } from '../auth/service.js';
-import { GameState } from '../schemas/GameState.js';
+import { GameState } from '../schemas/game-state.js';
 
 const verifyDevToken = createDevTokenVerifier();
 const allowDevTokens = readBooleanEnv('AUTH_ALLOW_DEV_TOKENS', true);

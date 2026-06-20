@@ -7,6 +7,7 @@ export default class LoginView extends Container {
 
     this.app = app;
     this.onLogin = options.onLogin || null;
+    this.initialMessage = options.message || '准备登录';
     this.status = 'idle';
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
 
@@ -23,7 +24,7 @@ export default class LoginView extends Container {
     this.title.setLayout(anchor({ anchor: 'top', y: 120, width: 240, height: 44 }));
 
     this.statusText = this.addChild(
-      new Text('准备登录', {
+      new Text(this.initialMessage, {
         fillStyle: '#dce8de',
         fontSize: 14,
         lineHeight: 20,
@@ -91,7 +92,7 @@ export default class LoginView extends Container {
     else if (status === 'loading') this.statusText.text = '微信登录中...';
     else if (status === 'ready') this.statusText.text = '登录成功';
     else if (status === 'failed') this.statusText.text = '登录失败，请重试';
-    else this.statusText.text = '准备登录';
+    else this.statusText.text = this.initialMessage;
 
     if (error) console.warn('[wx-mahjong] wechat login failed', error);
     this.invalidatePaint();

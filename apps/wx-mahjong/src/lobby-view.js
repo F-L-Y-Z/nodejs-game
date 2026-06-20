@@ -1,13 +1,15 @@
 import { Button, Container, Shape, Text, anchor } from '@repo/mc2d';
+import { clearCachedAuthSession } from './auth/wechat-login.js';
+import LoginView from './login-view.js';
 import MainView from './main-view.js';
 
 export default class LobbyView extends Container {
-  constructor(app, authSession) {
+  constructor(app, authSession, options = {}) {
     super();
 
     this.app = app;
     this.authSession = authSession;
-    this.status = '请选择房间操作';
+    this.status = options.message || '请选择房间操作';
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
 
     this.background = this.addChild(new Shape({ fillStyle: '#173b32' }));
@@ -50,6 +52,15 @@ export default class LobbyView extends Container {
     );
     this.joinButton.setLayout(anchor({ anchor: 'top', y: 320, width: 170, height: 44 }));
     this.joinButton.on('tap', () => this.handleJoin());
+
+    this.reloginButton = this.addChild(
+      new Button('重新登录', {
+        background: { fillStyle: '#385f55', radius: 6 },
+        label: { fillStyle: '#f9f2dc', fontSize: 15 },
+      }),
+    );
+    this.reloginButton.setLayout(anchor({ anchor: 'top', y: 382, width: 170, height: 40 }));
+    this.reloginButton.on('tap', () => this.handleRelogin());
   }
 
   async handleJoin() {
@@ -64,6 +75,18 @@ export default class LobbyView extends Container {
 
   enterRoom(options) {
     this.app.setRoot(new MainView(this.app, this.authSession, options));
+  }
+
+  handleRelogin() {
+    clearCachedAuthSession(this.app);
+    const loginView = new LoginView(this.app, {
+      message: '已清除登录缓存，请重新登录',
+      onLogin: (authSession) => {
+        this.app.setRoot(new LobbyView(this.app, authSession));
+      },
+    });
+    this.app.setRoot(loginView);
+    loginView.startLogin(true);
   }
 
   setStatus(text) {

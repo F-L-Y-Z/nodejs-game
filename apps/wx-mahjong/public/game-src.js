@@ -1351,6 +1351,177 @@
   var GAME_ID = "mahjong";
   var SERVER_BASE_URL = "http://192.168.2.191:2567";
 
+  // src/auth/wechat-login.js
+  var AUTH_STORAGE_KEY = "wxMahjong.authSession";
+  function getCachedAuthSession(app2, options = {}) {
+    try {
+      const gameId = getGameId(options);
+      const session = app2.platform.getStorage ? app2.platform.getStorage(AUTH_STORAGE_KEY) : null;
+      if (session && session.gameId === gameId && session.token && session.user) return session;
+    } catch (error) {
+    }
+    return null;
+  }
+  function clearCachedAuthSession(app2) {
+    try {
+      if (app2.platform.removeStorage) {
+        app2.platform.removeStorage(AUTH_STORAGE_KEY);
+      }
+    } catch (error) {
+    }
+  }
+  async function loginWechatMiniGame(app2, options = {}) {
+    const gameId = getGameId(options);
+    const userProfile = normalizeUserProfile(options.userInfo);
+    const loginInfo = await app2.platformLogin();
+    if (!loginInfo || !loginInfo.code) {
+      throw new Error("wx.login did not return a code.");
+    }
+    const loginUrl = `${getServerBaseUrl(options)}/auth/wechat/minigame/login`;
+    console.info("[wx-mahjong] wechat login request", {
+      gameId,
+      url: loginUrl,
+      hasAvatarUrl: Boolean(userProfile.avatarUrl)
+    });
+    let response = null;
+    try {
+      response = await app2.request({
+        url: loginUrl,
+        method: "POST",
+        header: {
+          "content-type": "application/json"
+        },
+        data: {
+          gameId,
+          code: loginInfo.code,
+          name: options.name || userProfile.nickName || "player",
+          avatarUrl: userProfile.avatarUrl || ""
+        }
+      });
+    } catch (error) {
+      console.warn("[wx-mahjong] wechat login request failed", {
+        gameId,
+        url: loginUrl,
+        errMsg: error && error.errMsg,
+        errno: error && error.errno
+      });
+      throw error;
+    }
+    const data = response && response.data;
+    if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data || !data.ok || !data.token) {
+      throw new Error(data && data.message || "Wechat login request failed.");
+    }
+    const session = {
+      gameId,
+      token: data.token,
+      user: data.user
+    };
+    if (app2.platform.setStorage) {
+      app2.platform.setStorage(AUTH_STORAGE_KEY, session);
+    }
+    return session;
+  }
+  function getServerBaseUrl(options) {
+    const value = options.serverBaseUrl || globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL;
+    return String(value).replace(/\/+$/, "");
+  }
+  function getGameId(options) {
+    return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || GAME_ID);
+  }
+  function normalizeUserProfile(value) {
+    const userInfo = value && value.userInfo ? value.userInfo : value;
+    return {
+      nickName: userInfo && userInfo.nickName || "",
+      avatarUrl: userInfo && userInfo.avatarUrl || ""
+    };
+  }
+
+  // src/login-view.js
+  var LoginView = class extends Container {
+    constructor(app2, options = {}) {
+      super();
+      this.app = app2;
+      this.onLogin = options.onLogin || null;
+      this.initialMessage = options.message || "\u51C6\u5907\u767B\u5F55";
+      this.status = "idle";
+      this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
+      this.background = this.addChild(new Shape({ fillStyle: "#173b32" }));
+      this.background.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
+      this.title = this.addChild(
+        new Text("\u7EA2\u4E2D\u9EBB\u5C06", {
+          fillStyle: "#f9f2dc",
+          fontSize: 28,
+          textAlign: "center"
+        })
+      );
+      this.title.setLayout(anchor({ anchor: "top", y: 120, width: 240, height: 44 }));
+      this.statusText = this.addChild(
+        new Text(this.initialMessage, {
+          fillStyle: "#dce8de",
+          fontSize: 14,
+          lineHeight: 20,
+          maxLines: 2
+        })
+      );
+      this.statusText.setLayout(anchor({ anchor: "top", y: 176, width: 260, height: 48 }));
+      this.retryButton = this.addChild(
+        new Button("\u91CD\u8BD5", {
+          background: { fillStyle: "#2f7df6", radius: 6 },
+          label: { fillStyle: "#fff", fontSize: 16 }
+        })
+      );
+      this.retryButton.setLayout(anchor({ anchor: "top", y: 246, width: 150, height: 42 }));
+      this.retryButton.visible = false;
+      this.retryButton.on("tap", () => this.startLogin(true));
+    }
+    async startLogin(force = false) {
+      if (this.status === "loading") return;
+      const cachedSession = !force ? getCachedAuthSession(this.app) : null;
+      if (cachedSession) {
+        this.finishLogin(cachedSession);
+        return;
+      }
+      this.setStatus("waiting");
+      try {
+        const { userInfo } = await this.app.getUserInfo({
+          container: this,
+          forceShowButton: true,
+          value: "\u5FAE\u4FE1\u767B\u5F55",
+          style: {
+            backgroundColor: "#07c160",
+            color: "#ffffff",
+            borderRadius: 6,
+            fontSize: 16,
+            lineHeight: 44
+          },
+          onShowButton: (button) => {
+            button.setLayout(anchor({ anchor: "top", y: 246, width: 150, height: 44 }));
+          }
+        });
+        this.setStatus("loading");
+        const authSession = await loginWechatMiniGame(this.app, { userInfo });
+        this.finishLogin(authSession);
+      } catch (error) {
+        this.setStatus("failed", error);
+      }
+    }
+    finishLogin(authSession) {
+      this.setStatus("ready");
+      if (this.onLogin) this.onLogin(authSession);
+    }
+    setStatus(status, error = null) {
+      this.status = status;
+      this.retryButton.visible = status === "failed";
+      if (status === "waiting") this.statusText.text = "\u8BF7\u5148\u5B8C\u6210\u5FAE\u4FE1\u767B\u5F55";
+      else if (status === "loading") this.statusText.text = "\u5FAE\u4FE1\u767B\u5F55\u4E2D...";
+      else if (status === "ready") this.statusText.text = "\u767B\u5F55\u6210\u529F";
+      else if (status === "failed") this.statusText.text = "\u767B\u5F55\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5";
+      else this.statusText.text = this.initialMessage;
+      if (error) console.warn("[wx-mahjong] wechat login failed", error);
+      this.invalidatePaint();
+    }
+  };
+
   // src/server/tiles.js
   var SUITS = [
     { key: "W", name: "\u4E07", color: "#c0392b" },
@@ -1815,6 +1986,7 @@
       this.authSession = authSession;
       this.roomOptions = roomOptions;
       this.roomId = roomOptions.roomId || "";
+      this.clientId = createClientId();
       this.localServer = null;
       this.online = false;
       this.pollTimer = null;
@@ -1849,12 +2021,24 @@
         this.startPolling();
       } catch (error) {
         console.warn("[wx-mahjong] multiplayer connect failed", error);
-        this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5931\u8D25\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+        if (error && error.statusCode === 401 && this.view.backToLogin) {
+          this.view.backToLogin("\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55\u3002");
+        } else if (error && (error.statusCode === 404 || error.statusCode === 409 || error.statusCode === 410) && this.view.backToLobby) {
+          this.view.backToLobby(error.message || "\u623F\u95F4\u4E0D\u53EF\u7528\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
+        } else {
+          this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5931\u8D25\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+        }
       }
     }
     restart() {
       if (this.online) this.sendAction("restart");
       else this.startLocal();
+    }
+    ready() {
+      if (this.online) this.sendAction("ready");
+    }
+    leave() {
+      if (this.online) this.sendAction("leave");
     }
     discard(index) {
       if (this.online) this.sendAction("discard", { index });
@@ -1883,10 +2067,19 @@
           method: "POST",
           data: Object.assign({ action }, payload)
         });
+        if (data && data.left) {
+          this.stopPolling();
+          this.online = false;
+          if (this.view.backToLobby) this.view.backToLobby(data.message || "\u5DF2\u9000\u51FA\u623F\u95F4\u3002");
+          return;
+        }
         this.renderResponseState(data);
+        if (data && data.ok === false && this.view.showError) {
+          this.view.showError(data.message || "\u5F53\u524D\u4E0D\u80FD\u6267\u884C\u8BE5\u64CD\u4F5C\u3002");
+        }
       } catch (error) {
         console.warn("[wx-mahjong] action failed", action, error);
-        this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+        this.handleRequestError(error);
       }
     }
     startPolling() {
@@ -1906,24 +2099,28 @@
         this.renderResponseState(data);
       } catch (error) {
         console.warn("[wx-mahjong] snapshot poll failed", error);
-        this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+        this.handleRequestError(error);
       } finally {
         this.requestingSnapshot = false;
       }
     }
     async request(path, options = {}) {
       const response = await this.view.app.request({
-        url: `${getServerBaseUrl()}${path}`,
+        url: `${getServerBaseUrl2()}${path}`,
         method: options.method || "GET",
         header: {
           authorization: `Bearer ${this.authSession.token}`,
-          "content-type": "application/json"
+          "content-type": "application/json",
+          "x-client-id": this.clientId
         },
-        data: options.data || {}
+        data: Object.assign({ clientId: this.clientId }, options.data || {})
       });
       const data = response && response.data;
       if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data) {
-        throw new Error(data && data.message || "Mahjong request failed.");
+        const error = new Error(data && data.message || "Mahjong request failed.");
+        error.statusCode = response && response.statusCode;
+        error.code = data && data.code;
+        throw error;
       }
       return data;
     }
@@ -1945,6 +2142,38 @@
         this.view.renderState(state);
       });
     }
+    handleRequestError(error) {
+      const statusCode = error && error.statusCode;
+      if (statusCode === 401) {
+        this.stopPolling();
+        this.online = false;
+        if (this.view.backToLogin) {
+          this.view.backToLogin("\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55\u3002");
+          return;
+        }
+      }
+      if (statusCode === 409 && error.code === "account_replaced") {
+        this.stopPolling();
+        this.online = false;
+        if (this.view.backToLobby) {
+          this.view.backToLobby(error.message || "\u8D26\u53F7\u5DF2\u5728\u5176\u4ED6\u8BBE\u5907\u8FDB\u5165\u8BE5\u623F\u95F4\u3002");
+          return;
+        }
+      }
+      if (statusCode === 404 || statusCode === 410) {
+        this.stopPolling();
+        this.online = false;
+        if (this.view.backToLobby) {
+          this.view.backToLobby(error.message || "\u623F\u95F4\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
+          return;
+        }
+      }
+      if (this.view.showError) {
+        this.view.showError(error.message || "\u64CD\u4F5C\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+        return;
+      }
+      this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+    }
     getJoinPath() {
       if (this.roomId) return `/mahjong/rooms/${this.roomId}/join`;
       return "/mahjong/rooms";
@@ -1953,7 +2182,10 @@
       return `/mahjong/rooms/${this.roomId}/action`;
     }
   };
-  function getServerBaseUrl() {
+  function createClientId() {
+    return `wx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  function getServerBaseUrl2() {
     const value = globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL;
     return String(value).replace(/\/+$/, "");
   }
@@ -2004,6 +2236,8 @@
   function getActionItems(state) {
     const actions = [];
     const enabled = state && state.actions ? state.actions : {};
+    if (enabled.ready) actions.push({ key: "ready", label: "\u51C6\u5907" });
+    if (enabled.leave) actions.push({ key: "leave", label: "\u9000\u51FA" });
     if (enabled.pass) actions.push({ key: "pass", label: "\u8FC7" });
     if (enabled.peng) actions.push({ key: "peng", label: "\u78B0" });
     if (enabled.gang) actions.push({ key: "gang", label: "\u6760" });
@@ -2329,16 +2563,24 @@
         const pos = PLAYER_POS[index];
         const active = state.currentPlayer === index && state.phase !== "round-over";
         const color = active ? "#ffd86b" : "#dce8de";
+        const readyText = state.roomStatus === "waiting" || state.roomStatus === "settling" ? ` ${player.isReady ? "\u5DF2\u51C6\u5907" : "\u672A\u51C6\u5907"}` : "";
         if (pos === "bottom") {
-          drawText(ctx, player.name, x + Math.max(18, metrics.handX - 18), y + metrics.handY + metrics.tileH / 2, 13, color);
+          drawText(
+            ctx,
+            `${player.name}${readyText}`,
+            x + Math.max(18, metrics.handX - 18),
+            y + metrics.handY + metrics.tileH / 2,
+            13,
+            color
+          );
         } else if (pos === "top") {
-          drawText(ctx, `${player.name} ${player.handCount}\u5F20`, x + width / 2, y + metrics.tableTop - 16, 13, color);
+          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + width / 2, y + metrics.tableTop - 16, 13, color);
         } else if (pos === "left") {
           const nameX = metrics.isLandscape ? metrics.tableLeft - 50 : 20;
-          drawText(ctx, `${player.name} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
+          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
         } else if (pos === "right") {
           const nameX = metrics.isLandscape ? metrics.tableRight + 50 : width - 20;
-          drawText(ctx, `${player.name} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
+          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
         }
       });
     }
@@ -2454,22 +2696,43 @@
       this.invalidatePaint();
     }
     handleAction(action) {
-      if (action.key === "pass") this.controller.pass();
+      if (action.key === "ready") this.controller.ready();
+      else if (action.key === "leave") this.controller.leave();
+      else if (action.key === "pass") this.controller.pass();
       else if (action.key === "peng") this.controller.peng();
       else if (action.key === "gang") this.controller.gang();
       else if (action.key === "hu") this.controller.hu();
       else if (action.key === "restart") this.controller.restart();
       else if (action.key.indexOf("gang:") === 0) this.controller.gang(action.tile);
     }
+    backToLobby(message = "") {
+      this.app.setRoot(new LobbyView(this.app, this.authSession, { message }));
+    }
+    backToLogin(message = "") {
+      const loginView2 = new LoginView(this.app, {
+        message,
+        onLogin: (authSession) => {
+          this.app.setRoot(new LobbyView(this.app, authSession));
+        }
+      });
+      this.app.setRoot(loginView2);
+      loginView2.startLogin(true);
+    }
+    showError(message) {
+      if (!this.state) return;
+      this.state = Object.assign({}, this.state, { message });
+      this.board.setState(this.state);
+      this.rebuildControls();
+    }
   };
 
   // src/lobby-view.js
-  var LobbyView = class extends Container {
-    constructor(app2, authSession) {
+  var LobbyView = class _LobbyView extends Container {
+    constructor(app2, authSession, options = {}) {
       super();
       this.app = app2;
       this.authSession = authSession;
-      this.status = "\u8BF7\u9009\u62E9\u623F\u95F4\u64CD\u4F5C";
+      this.status = options.message || "\u8BF7\u9009\u62E9\u623F\u95F4\u64CD\u4F5C";
       this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
       this.background = this.addChild(new Shape({ fillStyle: "#173b32" }));
       this.background.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
@@ -2507,6 +2770,14 @@
       );
       this.joinButton.setLayout(anchor({ anchor: "top", y: 320, width: 170, height: 44 }));
       this.joinButton.on("tap", () => this.handleJoin());
+      this.reloginButton = this.addChild(
+        new Button("\u91CD\u65B0\u767B\u5F55", {
+          background: { fillStyle: "#385f55", radius: 6 },
+          label: { fillStyle: "#f9f2dc", fontSize: 15 }
+        })
+      );
+      this.reloginButton.setLayout(anchor({ anchor: "top", y: 382, width: 170, height: 40 }));
+      this.reloginButton.on("tap", () => this.handleRelogin());
     }
     async handleJoin() {
       const roomId = await requestRoomId();
@@ -2519,6 +2790,17 @@
     }
     enterRoom(options) {
       this.app.setRoot(new MainView(this.app, this.authSession, options));
+    }
+    handleRelogin() {
+      clearCachedAuthSession(this.app);
+      const loginView2 = new LoginView(this.app, {
+        message: "\u5DF2\u6E05\u9664\u767B\u5F55\u7F13\u5B58\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55",
+        onLogin: (authSession) => {
+          this.app.setRoot(new _LobbyView(this.app, authSession));
+        }
+      });
+      this.app.setRoot(loginView2);
+      loginView2.startLogin(true);
     }
     setStatus(text) {
       this.status = text;
@@ -2547,168 +2829,6 @@
     }
     return Promise.resolve("");
   }
-
-  // src/auth/wechat-login.js
-  var AUTH_STORAGE_KEY = "wxMahjong.authSession";
-  function getCachedAuthSession(app2, options = {}) {
-    try {
-      const gameId = getGameId(options);
-      const session = app2.platform.getStorage ? app2.platform.getStorage(AUTH_STORAGE_KEY) : null;
-      if (session && session.gameId === gameId && session.token && session.user) return session;
-    } catch (error) {
-    }
-    return null;
-  }
-  async function loginWechatMiniGame(app2, options = {}) {
-    const gameId = getGameId(options);
-    const userProfile = normalizeUserProfile(options.userInfo);
-    const loginInfo = await app2.platformLogin();
-    if (!loginInfo || !loginInfo.code) {
-      throw new Error("wx.login did not return a code.");
-    }
-    const loginUrl = `${getServerBaseUrl2(options)}/auth/wechat/minigame/login`;
-    console.info("[wx-mahjong] wechat login request", {
-      gameId,
-      url: loginUrl,
-      hasAvatarUrl: Boolean(userProfile.avatarUrl)
-    });
-    let response = null;
-    try {
-      response = await app2.request({
-        url: loginUrl,
-        method: "POST",
-        header: {
-          "content-type": "application/json"
-        },
-        data: {
-          gameId,
-          code: loginInfo.code,
-          name: options.name || userProfile.nickName || "player",
-          avatarUrl: userProfile.avatarUrl || ""
-        }
-      });
-    } catch (error) {
-      console.warn("[wx-mahjong] wechat login request failed", {
-        gameId,
-        url: loginUrl,
-        errMsg: error && error.errMsg,
-        errno: error && error.errno
-      });
-      throw error;
-    }
-    const data = response && response.data;
-    if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data || !data.ok || !data.token) {
-      throw new Error(data && data.message || "Wechat login request failed.");
-    }
-    const session = {
-      gameId,
-      token: data.token,
-      user: data.user
-    };
-    if (app2.platform.setStorage) {
-      app2.platform.setStorage(AUTH_STORAGE_KEY, session);
-    }
-    return session;
-  }
-  function getServerBaseUrl2(options) {
-    const value = options.serverBaseUrl || globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL;
-    return String(value).replace(/\/+$/, "");
-  }
-  function getGameId(options) {
-    return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || GAME_ID);
-  }
-  function normalizeUserProfile(value) {
-    const userInfo = value && value.userInfo ? value.userInfo : value;
-    return {
-      nickName: userInfo && userInfo.nickName || "",
-      avatarUrl: userInfo && userInfo.avatarUrl || ""
-    };
-  }
-
-  // src/login-view.js
-  var LoginView = class extends Container {
-    constructor(app2, options = {}) {
-      super();
-      this.app = app2;
-      this.onLogin = options.onLogin || null;
-      this.status = "idle";
-      this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
-      this.background = this.addChild(new Shape({ fillStyle: "#173b32" }));
-      this.background.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
-      this.title = this.addChild(
-        new Text("\u7EA2\u4E2D\u9EBB\u5C06", {
-          fillStyle: "#f9f2dc",
-          fontSize: 28,
-          textAlign: "center"
-        })
-      );
-      this.title.setLayout(anchor({ anchor: "top", y: 120, width: 240, height: 44 }));
-      this.statusText = this.addChild(
-        new Text("\u51C6\u5907\u767B\u5F55", {
-          fillStyle: "#dce8de",
-          fontSize: 14,
-          lineHeight: 20,
-          maxLines: 2
-        })
-      );
-      this.statusText.setLayout(anchor({ anchor: "top", y: 176, width: 260, height: 48 }));
-      this.retryButton = this.addChild(
-        new Button("\u91CD\u8BD5", {
-          background: { fillStyle: "#2f7df6", radius: 6 },
-          label: { fillStyle: "#fff", fontSize: 16 }
-        })
-      );
-      this.retryButton.setLayout(anchor({ anchor: "top", y: 246, width: 150, height: 42 }));
-      this.retryButton.visible = false;
-      this.retryButton.on("tap", () => this.startLogin(true));
-    }
-    async startLogin(force = false) {
-      if (this.status === "loading") return;
-      const cachedSession = !force ? getCachedAuthSession(this.app) : null;
-      if (cachedSession) {
-        this.finishLogin(cachedSession);
-        return;
-      }
-      this.setStatus("waiting");
-      try {
-        const { userInfo } = await this.app.getUserInfo({
-          container: this,
-          forceShowButton: true,
-          value: "\u5FAE\u4FE1\u767B\u5F55",
-          style: {
-            backgroundColor: "#07c160",
-            color: "#ffffff",
-            borderRadius: 6,
-            fontSize: 16,
-            lineHeight: 44
-          },
-          onShowButton: (button) => {
-            button.setLayout(anchor({ anchor: "top", y: 246, width: 150, height: 44 }));
-          }
-        });
-        this.setStatus("loading");
-        const authSession = await loginWechatMiniGame(this.app, { userInfo });
-        this.finishLogin(authSession);
-      } catch (error) {
-        this.setStatus("failed", error);
-      }
-    }
-    finishLogin(authSession) {
-      this.setStatus("ready");
-      if (this.onLogin) this.onLogin(authSession);
-    }
-    setStatus(status, error = null) {
-      this.status = status;
-      this.retryButton.visible = status === "failed";
-      if (status === "waiting") this.statusText.text = "\u8BF7\u5148\u5B8C\u6210\u5FAE\u4FE1\u767B\u5F55";
-      else if (status === "loading") this.statusText.text = "\u5FAE\u4FE1\u767B\u5F55\u4E2D...";
-      else if (status === "ready") this.statusText.text = "\u767B\u5F55\u6210\u529F";
-      else if (status === "failed") this.statusText.text = "\u767B\u5F55\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5";
-      else this.statusText.text = "\u51C6\u5907\u767B\u5F55";
-      if (error) console.warn("[wx-mahjong] wechat login failed", error);
-      this.invalidatePaint();
-    }
-  };
 
   // src/index.js
   var app = createWeChatApp({ fps: 60 });

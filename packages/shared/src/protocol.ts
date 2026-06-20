@@ -29,7 +29,7 @@ export type MoveMessage = {
   y: number;
 };
 
-export type MahjongActionName = 'discard' | 'pass' | 'peng' | 'gang' | 'hu' | 'restart';
+export type MahjongActionName = 'discard' | 'pass' | 'peng' | 'gang' | 'hu' | 'restart' | 'ready' | 'leave';
 
 export type MahjongActionMessage = {
   action: MahjongActionName;

@@ -116,7 +116,7 @@ room.send("move", { x: 1, y: 0 });
 src/
   index.ts              # 服务入口
   rooms/
-    GameRoom.ts         # Colyseus 房间逻辑
+    game-room.ts        # Colyseus 房间逻辑
   schemas/
-    GameState.ts        # 同步状态模型
+    game-state.ts       # 同步状态模型
 ```

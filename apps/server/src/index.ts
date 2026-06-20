@@ -12,7 +12,7 @@ import { createServer } from 'node:http';
 import { registerAuthRoutes } from './auth/routes.js';
 import { authRouteLogger, authTokenService, authWechatLogger } from './auth/service.js';
 import { registerMahjongRoutes } from './mahjong/routes.js';
-import { GameRoom } from './rooms/GameRoom.js';
+import { GameRoom } from './rooms/game-room.js';
 
 const port = readNumberEnv('PORT', 2567);
 const logger = createConsoleLogger(SERVICE_NAME);

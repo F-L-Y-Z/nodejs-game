@@ -13,6 +13,16 @@ export function getCachedAuthSession(app, options = {}) {
   return null;
 }
 
+export function clearCachedAuthSession(app) {
+  try {
+    if (app.platform.removeStorage) {
+      app.platform.removeStorage(AUTH_STORAGE_KEY);
+    }
+  } catch (error) {
+    // Ignore storage failures; the next login attempt can still continue.
+  }
+}
+
 export async function loginWechatMiniGame(app, options = {}) {
   const gameId = getGameId(options);
   const userProfile = normalizeUserProfile(options.userInfo);

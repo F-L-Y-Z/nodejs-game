@@ -9,6 +9,7 @@ export default class MainController {
     this.authSession = authSession
     this.roomOptions = roomOptions
     this.roomId = roomOptions.roomId || ''
+    this.clientId = createClientId()
     this.localServer = null
     this.online = false
     this.pollTimer = null
@@ -47,13 +48,27 @@ export default class MainController {
       this.startPolling()
     } catch (error) {
       console.warn('[wx-mahjong] multiplayer connect failed', error)
-      this.startLocal('多人连接失败，已切换本地模式。')
+      if (error && error.statusCode === 401 && this.view.backToLogin) {
+        this.view.backToLogin('登录已过期，请重新登录。')
+      } else if (error && (error.statusCode === 404 || error.statusCode === 409 || error.statusCode === 410) && this.view.backToLobby) {
+        this.view.backToLobby(error.message || '房间不可用，请重新创建或加入。')
+      } else {
+        this.startLocal('多人连接失败，已切换本地模式。')
+      }
     }
   }
 
   restart() {
     if (this.online) this.sendAction('restart')
     else this.startLocal()
+  }
+
+  ready() {
+    if (this.online) this.sendAction('ready')
+  }
+
+  leave() {
+    if (this.online) this.sendAction('leave')
   }
 
   discard(index) {
@@ -88,10 +103,19 @@ export default class MainController {
         method: 'POST',
         data: Object.assign({ action }, payload),
       })
+      if (data && data.left) {
+        this.stopPolling()
+        this.online = false
+        if (this.view.backToLobby) this.view.backToLobby(data.message || '已退出房间。')
+        return
+      }
       this.renderResponseState(data)
+      if (data && data.ok === false && this.view.showError) {
+        this.view.showError(data.message || '当前不能执行该操作。')
+      }
     } catch (error) {
       console.warn('[wx-mahjong] action failed', action, error)
-      this.startLocal('多人连接异常，已切换本地模式。')
+      this.handleRequestError(error)
     }
   }
 
@@ -114,7 +138,7 @@ export default class MainController {
       this.renderResponseState(data)
     } catch (error) {
       console.warn('[wx-mahjong] snapshot poll failed', error)
-      this.startLocal('多人连接异常，已切换本地模式。')
+      this.handleRequestError(error)
     } finally {
       this.requestingSnapshot = false
     }
@@ -127,12 +151,16 @@ export default class MainController {
       header: {
         authorization: `Bearer ${this.authSession.token}`,
         'content-type': 'application/json',
+        'x-client-id': this.clientId,
       },
-      data: options.data || {},
+      data: Object.assign({ clientId: this.clientId }, options.data || {}),
     })
     const data = response && response.data
     if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data) {
-      throw new Error((data && data.message) || 'Mahjong request failed.')
+      const error = new Error((data && data.message) || 'Mahjong request failed.')
+      error.statusCode = response && response.statusCode
+      error.code = data && data.code
+      throw error
     }
     return data
   }
@@ -157,6 +185,39 @@ export default class MainController {
     })
   }
 
+  handleRequestError(error) {
+    const statusCode = error && error.statusCode
+    if (statusCode === 401) {
+      this.stopPolling()
+      this.online = false
+      if (this.view.backToLogin) {
+        this.view.backToLogin('登录已过期，请重新登录。')
+        return
+      }
+    }
+    if (statusCode === 409 && error.code === 'account_replaced') {
+      this.stopPolling()
+      this.online = false
+      if (this.view.backToLobby) {
+        this.view.backToLobby(error.message || '账号已在其他设备进入该房间。')
+        return
+      }
+    }
+    if (statusCode === 404 || statusCode === 410) {
+      this.stopPolling()
+      this.online = false
+      if (this.view.backToLobby) {
+        this.view.backToLobby(error.message || '房间已失效，请重新创建或加入。')
+        return
+      }
+    }
+    if (this.view.showError) {
+      this.view.showError(error.message || '操作失败，请稍后重试。')
+      return
+    }
+    this.startLocal('多人连接异常，已切换本地模式。')
+  }
+
   getJoinPath() {
     if (this.roomId) return `/mahjong/rooms/${this.roomId}/join`
     return '/mahjong/rooms'
@@ -165,6 +226,10 @@ export default class MainController {
   getActionPath() {
     return `/mahjong/rooms/${this.roomId}/action`
   }
+}
+
+function createClientId() {
+  return `wx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function getServerBaseUrl() {

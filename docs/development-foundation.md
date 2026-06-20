@@ -109,8 +109,8 @@ services/       调用数据库、Redis、奖励、匹配等外部能力
 
 ```txt
 apps/server/src/rooms/game/
-  GameRoom.ts
-  GameState.ts
+  game-room.ts
+  game-state.ts
   messages.ts
   validators.ts
   commands/

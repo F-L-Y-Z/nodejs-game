@@ -1,7 +1,7 @@
 import { canHuWithMelds } from './hu.js';
 import { ZHONG, countTiles, createDeck, removeTiles, shuffle, sortTiles, tileOrder } from './tiles.js';
 
-export type MahjongAction = 'discard' | 'pass' | 'peng' | 'gang' | 'hu' | 'restart';
+export type MahjongAction = 'discard' | 'pass' | 'peng' | 'gang' | 'hu' | 'restart' | 'ready' | 'leave';
 
 type Meld = {
   type: string;
@@ -37,6 +37,8 @@ export type MahjongSnapshot = {
   players: Array<{
     index: number;
     name: string;
+    isHuman: boolean;
+    isReady?: boolean;
     hand: string[];
     drawnTile: string | null;
     handCount: number;
@@ -66,8 +68,10 @@ export class MahjongTable {
   private bird: string | null = null;
   private message = '';
 
-  constructor() {
-    this.start();
+  constructor(startNow = true) {
+    this.resetSeats();
+    if (startNow) this.startRoundKeepingHumans();
+    else this.message = '等待玩家准备。';
   }
 
   addHuman(clientId: string, userId: string, name: string): number | null {
@@ -99,12 +103,69 @@ export class MahjongTable {
     return seat >= 0 ? seat : null;
   }
 
+  hasHuman(clientId: string): boolean {
+    return this.getSeatByClient(clientId) !== null;
+  }
+
+  getHumanUserIds(): string[] {
+    return this.players
+      .map((player) => player.userId)
+      .filter((userId): userId is string => Boolean(userId));
+  }
+
+  getHumanCount(): number {
+    return this.getHumanUserIds().length;
+  }
+
+  getSeatInfos(): Array<{ index: number; userId: string | null; name: string; isHuman: boolean }> {
+    return this.players.map((player, index) => ({
+      index,
+      userId: player.userId,
+      name: player.name,
+      isHuman: Boolean(player.userId),
+    }));
+  }
+
   start(): void {
-    this.wall = shuffle(createDeck());
+    this.resetSeats();
+    this.startRoundKeepingHumans();
+  }
+
+  startRoundKeepingHumans(): void {
+    this.dealRound();
+  }
+
+  private resetSeats(): void {
     this.players = AI_NAMES.map((name) => ({
       clientId: null,
       userId: null,
       name,
+      hand: [],
+      drawnTile: null,
+      discards: [],
+      melds: [],
+    }));
+    this.wall = [];
+    this.currentPlayer = 0;
+    this.phase = 'waiting';
+    this.lastDiscard = null;
+    this.pendingActions = [];
+    this.winner = null;
+    this.bird = null;
+    this.message = '等待玩家准备。';
+  }
+
+  private dealRound(): void {
+    const humans = this.players.map((player, index) => ({
+      clientId: player.clientId,
+      userId: player.userId,
+      name: player.clientId ? player.name : AI_NAMES[index],
+    }));
+    this.wall = shuffle(createDeck());
+    this.players = AI_NAMES.map((name, index) => ({
+      clientId: humans[index]?.clientId || null,
+      userId: humans[index]?.userId || null,
+      name: humans[index]?.name || name,
       hand: [],
       drawnTile: null,
       discards: [],
@@ -148,7 +209,7 @@ export class MahjongTable {
     if (seat === null) return false;
 
     if (action === 'restart') {
-      this.restartKeepingHumans();
+      this.startRoundKeepingHumans();
       return true;
     }
     if (action === 'discard') return this.playerDiscard(seat, Number(payload.index));
@@ -194,21 +255,6 @@ export class MahjongTable {
     return !this.players[this.currentPlayer].clientId;
   }
 
-  private restartKeepingHumans(): void {
-    const humans = this.players.map((player) => ({
-      clientId: player.clientId,
-      userId: player.userId,
-      name: player.clientId ? player.name : null,
-    }));
-    this.start();
-    humans.forEach((human, index) => {
-      if (!human.clientId || !human.userId || !human.name) return;
-      this.players[index].clientId = human.clientId;
-      this.players[index].userId = human.userId;
-      this.players[index].name = human.name;
-    });
-  }
-
   private sortHands(): void {
     this.players.forEach((player) => {
       player.hand = sortTiles(player.hand);
@@ -226,6 +272,7 @@ export class MahjongTable {
     return {
       index: viewSeat,
       name: ownSeat ? '你' : player.name,
+      isHuman: Boolean(player.userId),
       hand,
       drawnTile: ownSeat ? player.drawnTile : null,
       handCount: this.getPlayerTiles(tableSeat).length,
