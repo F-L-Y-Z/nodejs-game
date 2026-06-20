@@ -36,10 +36,16 @@ export function registerMahjongWebSocket(server: HttpServer): void {
 
     try {
       const url = getRequestUrl(request);
+      console.info('[mahjong-ws] upgrade received', {
+        path: url.pathname,
+        roomId: url.searchParams.get('roomId') || '',
+        clientId: url.searchParams.get('clientId') || '',
+      });
       const token = url.searchParams.get('token') || '';
       const roomId = normalizeRoomId(url.searchParams.get('roomId'));
       const clientId = normalizeClientId(url.searchParams.get('clientId'));
       if (!roomId || !clientId) {
+        console.warn('[mahjong-ws] upgrade rejected: invalid params', { roomId, clientId });
         rejectUpgrade(socket, 400, 'Bad Request');
         return;
       }
@@ -47,6 +53,13 @@ export function registerMahjongWebSocket(server: HttpServer): void {
       const auth = await verifyToken(token);
       const snapshot = lobby.snapshot(roomId, auth, clientId);
       if (isLobbyError(snapshot)) {
+        console.warn('[mahjong-ws] upgrade rejected', {
+          roomId,
+          clientId,
+          userId: auth.userId,
+          code: snapshot.code,
+          status: snapshot.status,
+        });
         rejectUpgrade(socket, snapshot.status, snapshot.message);
         return;
       }
@@ -61,22 +74,43 @@ export function registerMahjongWebSocket(server: HttpServer): void {
         buffer: Buffer.from(head || []),
       };
       connections.add(connection);
+      console.info('[mahjong-ws] connected', {
+        roomId,
+        clientId,
+        userId: auth.userId,
+        connectionCount: connections.size,
+      });
 
       socket.on('data', (chunk) => handleData(connection, chunk, connections));
       socket.on('close', () => {
         connection.closed = true;
         connections.delete(connection);
+        console.info('[mahjong-ws] closed', {
+          roomId: connection.roomId,
+          clientId: connection.clientId,
+          userId: connection.auth.userId,
+          connectionCount: connections.size,
+        });
       });
-      socket.on('error', () => {
+      socket.on('error', (error) => {
         connection.closed = true;
         connections.delete(connection);
+        console.warn('[mahjong-ws] socket error', {
+          roomId: connection.roomId,
+          clientId: connection.clientId,
+          userId: connection.auth.userId,
+          message: error instanceof Error ? error.message : String(error),
+        });
       });
 
       sendJson(connection, { type: 'snapshot', ok: true, ...snapshot });
       if (connection.buffer.length) {
         readFrames(connection, connections);
       }
-    } catch {
+    } catch (error) {
+      console.warn('[mahjong-ws] upgrade rejected: auth failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
       rejectUpgrade(socket, 401, 'Unauthorized');
     }
   });
@@ -198,8 +232,22 @@ function handleMessage(
   }
 
   const action = String(message.action || '') as MahjongAction;
+  console.info('[mahjong-ws] action', {
+    roomId: connection.roomId,
+    clientId: connection.clientId,
+    userId: connection.auth.userId,
+    action,
+  });
   const result = lobby.action(connection.roomId, connection.auth, action, message, connection.clientId);
   if (isLobbyError(result)) {
+    console.warn('[mahjong-ws] action rejected', {
+      roomId: connection.roomId,
+      clientId: connection.clientId,
+      userId: connection.auth.userId,
+      action,
+      code: result.code,
+      status: result.status,
+    });
     sendJson(connection, { type: 'error', ok: false, code: result.code, message: result.message });
     if (result.code === 'account_replaced' || result.code === 'room_not_found') {
       closeConnection(connection);
