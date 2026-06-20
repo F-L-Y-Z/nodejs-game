@@ -35,6 +35,10 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
 
     logger.warn('AUTH_TOKEN_SECRET is not set; using development token secret.');
   }
+  logger.info('Auth token service initialized.', {
+    ttlSeconds,
+    usingConfiguredSecret: Boolean(configuredSecret),
+  });
 
   function sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId'>): string {
     const now = Math.floor(Date.now() / 1000);
@@ -50,16 +54,25 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
     const encodedPayload = encodeBase64Url(JSON.stringify(payload));
     const signature = signPayload(encodedPayload, secret);
 
+    logger.info('Auth token issued.', {
+      userId: context.userId,
+      gameId: context.gameId,
+      roles: context.roles,
+      expiresAt: payload.exp,
+    });
+
     return `${TOKEN_PREFIX}.${encodedPayload}.${signature}`;
   }
 
   async function verify(token: string | undefined): Promise<AuthContext> {
     if (!token) {
+      logger.warn('Auth token verification failed: missing token.');
       throw missingTokenError();
     }
 
     const parts = token.split('.');
     if (parts.length !== 4 || `${parts[0]}.${parts[1]}` !== TOKEN_PREFIX) {
+      logger.warn('Auth token verification failed: invalid token format.');
       throw invalidTokenError();
     }
 
@@ -67,6 +80,7 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
     const expectedSignature = signPayload(encodedPayload, secret);
 
     if (!safeEqual(signature, expectedSignature)) {
+      logger.warn('Auth token verification failed: signature mismatch.');
       throw invalidTokenError();
     }
 
@@ -74,8 +88,19 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
     const now = Math.floor(Date.now() / 1000);
 
     if (payload.exp <= now) {
+      logger.warn('Auth token verification failed: token expired.', {
+        userId: payload.sub,
+        gameId: payload.gameId,
+        expiresAt: payload.exp,
+      });
       throw invalidTokenError();
     }
+
+    logger.debug('Auth token verified.', {
+      userId: payload.sub,
+      gameId: payload.gameId,
+      roles: payload.roles,
+    });
 
     return {
       userId: payload.sub,

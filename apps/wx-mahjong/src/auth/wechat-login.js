@@ -1,5 +1,5 @@
-const DEFAULT_SERVER_BASE_URL = 'http://localhost:2567';
-const DEFAULT_GAME_ID = 'mahjong';
+import { GAME_ID, SERVER_BASE_URL } from '../config.js';
+
 const AUTH_STORAGE_KEY = 'wxMahjong.authSession';
 
 export function getCachedAuthSession(app, options = {}) {
@@ -52,10 +52,10 @@ export async function loginWechatMiniGame(app, options = {}) {
 }
 
 function getServerBaseUrl(options) {
-  const value = options.serverBaseUrl || globalThis.__WX_MAHJONG_SERVER_URL__ || DEFAULT_SERVER_BASE_URL;
+  const value = options.serverBaseUrl || globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL;
   return String(value).replace(/\/+$/, '');
 }
 
 function getGameId(options) {
-  return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || DEFAULT_GAME_ID);
+  return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || GAME_ID);
 }

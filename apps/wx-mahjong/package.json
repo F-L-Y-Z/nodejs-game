@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js",
-    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js --watch",
+    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game-src.js",
+    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game-src.js --watch",
     "typecheck": "echo \"skip typecheck\"",
-    "clean": "rm -f public/game.js"
+    "clean": "rm -f public/game-src.js"
   },
   "dependencies": {
     "@repo/mc2d": "workspace:*"
