@@ -10,7 +10,7 @@ export default class MainView extends Container {
     this.app = app;
     this.state = null;
     this.authStatus = 'idle';
-    this.authSession = getCachedAuthSession(app);
+    this.authSession = null; //getCachedAuthSession(app); //TODO test
     this.controls = [];
     this.controlSizeKey = '';
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
@@ -26,7 +26,7 @@ export default class MainView extends Container {
       }),
     );
     this.authText.touchEnabled = true;
-    this.authText.setLayout(anchor({ anchor: 'top-left', x: 12, y: 8, width: 220, height: 24 }));
+    this.authText.setLayout(anchor({ anchor: 'top-left', x: 18, y: 28, width: 220, height: 24 }));
     this.authText.on('tap', () => {
       if (this.authStatus === 'failed') this.startLogin();
     });
@@ -35,14 +35,32 @@ export default class MainView extends Container {
       this.controller.setAuthSession(this.authSession);
       this.setAuthStatus('ready');
     } else {
-      this.setAuthStatus('idle');
+      this.setAuthStatus('waiting');
     }
   }
 
   async startLogin() {
-    this.setAuthStatus('loading');
+    if (this.authSession) return;
+    this.setAuthStatus('waiting');
     try {
-      const authSession = await loginWechatMiniGame(this.app);
+      const { userInfo } = await this.app.getUserInfo({
+        container: this,
+        forceShowButton: true,
+        value: '微信登录',
+        style: {
+          backgroundColor: '#07c160',
+          color: '#ffffff',
+          borderRadius: 6,
+          fontSize: 16,
+          lineHeight: 44,
+        },
+        onShowButton: (button) => {
+          button.setLayout(anchor({ anchor: 'top', y: 48, width: 160, height: 44 }));
+        },
+      });
+
+      this.setAuthStatus('loading');
+      const authSession = await loginWechatMiniGame(this.app, { userInfo });
       this.authSession = authSession;
       this.controller.setAuthSession(authSession);
       this.setAuthStatus('ready');
@@ -57,6 +75,7 @@ export default class MainView extends Container {
     if (status === 'loading') this.authText.text = '微信登录中...';
     else if (status === 'ready') this.authText.text = `已登录 ${this.getDisplayName()}`;
     else if (status === 'failed') this.authText.text = '登录失败，点击重试';
+    else if (status === 'waiting') this.authText.text = '点击微信登录';
     else this.authText.text = '未登录';
 
     if (error) console.warn('[wx-mahjong] wechat login failed', error);

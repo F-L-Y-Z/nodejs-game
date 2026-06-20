@@ -1353,17 +1353,9 @@
 
   // src/auth/wechat-login.js
   var AUTH_STORAGE_KEY = "wxMahjong.authSession";
-  function getCachedAuthSession(app2, options = {}) {
-    try {
-      const gameId = getGameId(options);
-      const session = app2.platform.getStorage ? app2.platform.getStorage(AUTH_STORAGE_KEY) : null;
-      if (session && session.gameId === gameId && session.token && session.user) return session;
-    } catch (error) {
-    }
-    return null;
-  }
   async function loginWechatMiniGame(app2, options = {}) {
     const gameId = getGameId(options);
+    const userProfile = normalizeUserProfile(options.userInfo);
     const loginInfo = await app2.platformLogin();
     if (!loginInfo || !loginInfo.code) {
       throw new Error("wx.login did not return a code.");
@@ -1371,8 +1363,8 @@
     const loginUrl = `${getServerBaseUrl(options)}/auth/wechat/minigame/login`;
     console.info("[wx-mahjong] wechat login request", {
       gameId,
-      loginInfo,
-      url: loginUrl
+      url: loginUrl,
+      hasAvatarUrl: Boolean(userProfile.avatarUrl)
     });
     let response = null;
     try {
@@ -1385,15 +1377,16 @@
         data: {
           gameId,
           code: loginInfo.code,
-          name: options.name || "player"
+          name: options.name || userProfile.nickName || "player",
+          avatarUrl: userProfile.avatarUrl || ""
         }
       });
     } catch (error) {
       console.warn("[wx-mahjong] wechat login request failed", {
         gameId,
         url: loginUrl,
-        errMsg: error.errMsg,
-        errno: error.errno
+        errMsg: error && error.errMsg,
+        errno: error && error.errno
       });
       throw error;
     }
@@ -1417,6 +1410,13 @@
   }
   function getGameId(options) {
     return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || GAME_ID);
+  }
+  function normalizeUserProfile(value) {
+    const userInfo = value && value.userInfo ? value.userInfo : value;
+    return {
+      nickName: userInfo && userInfo.nickName || "",
+      avatarUrl: userInfo && userInfo.avatarUrl || ""
+    };
   }
 
   // src/server/tiles.js
@@ -2312,7 +2312,7 @@
       this.app = app2;
       this.state = null;
       this.authStatus = "idle";
-      this.authSession = getCachedAuthSession(app2);
+      this.authSession = null;
       this.controls = [];
       this.controlSizeKey = "";
       this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
@@ -2328,7 +2328,7 @@
         })
       );
       this.authText.touchEnabled = true;
-      this.authText.setLayout(anchor({ anchor: "top-left", x: 12, y: 8, width: 220, height: 24 }));
+      this.authText.setLayout(anchor({ anchor: "top-left", x: 18, y: 28, width: 220, height: 24 }));
       this.authText.on("tap", () => {
         if (this.authStatus === "failed") this.startLogin();
       });
@@ -2337,13 +2337,30 @@
         this.controller.setAuthSession(this.authSession);
         this.setAuthStatus("ready");
       } else {
-        this.setAuthStatus("idle");
+        this.setAuthStatus("waiting");
       }
     }
     async startLogin() {
-      this.setAuthStatus("loading");
+      if (this.authSession) return;
+      this.setAuthStatus("waiting");
       try {
-        const authSession = await loginWechatMiniGame(this.app);
+        const { userInfo } = await this.app.getUserInfo({
+          container: this,
+          forceShowButton: true,
+          value: "\u5FAE\u4FE1\u767B\u5F55",
+          style: {
+            backgroundColor: "#07c160",
+            color: "#ffffff",
+            borderRadius: 6,
+            fontSize: 16,
+            lineHeight: 44
+          },
+          onShowButton: (button) => {
+            button.setLayout(anchor({ anchor: "top", y: 48, width: 160, height: 44 }));
+          }
+        });
+        this.setAuthStatus("loading");
+        const authSession = await loginWechatMiniGame(this.app, { userInfo });
         this.authSession = authSession;
         this.controller.setAuthSession(authSession);
         this.setAuthStatus("ready");
@@ -2356,6 +2373,7 @@
       if (status === "loading") this.authText.text = "\u5FAE\u4FE1\u767B\u5F55\u4E2D...";
       else if (status === "ready") this.authText.text = `\u5DF2\u767B\u5F55 ${this.getDisplayName()}`;
       else if (status === "failed") this.authText.text = "\u767B\u5F55\u5931\u8D25\uFF0C\u70B9\u51FB\u91CD\u8BD5";
+      else if (status === "waiting") this.authText.text = "\u70B9\u51FB\u5FAE\u4FE1\u767B\u5F55";
       else this.authText.text = "\u672A\u767B\u5F55";
       if (error) console.warn("[wx-mahjong] wechat login failed", error);
       this.invalidatePaint();

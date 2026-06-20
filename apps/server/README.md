@@ -74,13 +74,14 @@ const response = await fetch("http://localhost:2567/auth/wechat/minigame/login",
   body: JSON.stringify({
     gameId: "mahjong",
     code: loginResult.code,
-    name: "player",
+    name: userInfo.nickName,
+    avatarUrl: userInfo.avatarUrl,
   }),
 });
 const { token } = await response.json();
 ```
 
-服务端会调用微信 `jscode2session`，用返回的 `openid` 生成内部用户 ID，并签发房间连接使用的服务端 token。
+服务端会调用微信 `jscode2session`，用返回的 `openid` 生成内部用户 ID，并签发房间连接使用的服务端 token。`name` 和 `avatarUrl` 来自客户端用户主动授权后的微信用户信息；服务端不能仅凭 `code/openid` 自动获取头像昵称。
 
 ## 脚本
 

@@ -10,6 +10,7 @@ const DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60;
 type TokenPayload = {
   sub: string;
   name: string;
+  avatarUrl?: string;
   roles: AuthContext['roles'];
   gameId?: string;
   provider: 'wechat_minigame';
@@ -18,7 +19,7 @@ type TokenPayload = {
 };
 
 export type AuthTokenService = {
-  sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId'>): string;
+  sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId' | 'avatarUrl'>): string;
   verify: TokenVerifier;
 };
 
@@ -40,11 +41,12 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
     usingConfiguredSecret: Boolean(configuredSecret),
   });
 
-  function sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId'>): string {
+  function sign(context: Pick<AuthContext, 'userId' | 'displayName' | 'roles' | 'gameId' | 'avatarUrl'>): string {
     const now = Math.floor(Date.now() / 1000);
     const payload: TokenPayload = {
       sub: context.userId,
       name: context.displayName,
+      avatarUrl: context.avatarUrl,
       roles: context.roles,
       gameId: context.gameId,
       provider: 'wechat_minigame',
@@ -58,6 +60,7 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
       userId: context.userId,
       gameId: context.gameId,
       roles: context.roles,
+      hasAvatarUrl: Boolean(context.avatarUrl),
       expiresAt: payload.exp,
     });
 
@@ -107,6 +110,7 @@ export function createAuthTokenService(logger: Logger): AuthTokenService {
       displayName: payload.name,
       roles: payload.roles,
       gameId: payload.gameId,
+      avatarUrl: payload.avatarUrl,
     };
   }
 
@@ -137,6 +141,7 @@ function parsePayload(encodedPayload: string): TokenPayload {
       typeof value.sub !== 'string' ||
       value.sub.length === 0 ||
       typeof value.name !== 'string' ||
+      (value.avatarUrl !== undefined && typeof value.avatarUrl !== 'string') ||
       !Array.isArray(value.roles) ||
       !value.roles.every((role) => role === 'player' || role === 'admin' || role === 'guest') ||
       (value.gameId !== undefined && typeof value.gameId !== 'string') ||

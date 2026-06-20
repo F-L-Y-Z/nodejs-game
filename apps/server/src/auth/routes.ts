@@ -12,6 +12,7 @@ type WechatMiniGameLoginResponse = {
   user: {
     id: string;
     displayName: string;
+    avatarUrl?: string;
   };
 };
 
@@ -26,12 +27,14 @@ export function registerAuthRoutes(app: Express, tokenService: AuthTokenService,
     const gameId = requireString(request.body?.gameId, '', 64);
     const code = requireString(request.body?.code, '', 256);
     const displayName = requireString(request.body?.name, 'Wechat Player', 24);
+    const avatarUrl = requireString(request.body?.avatarUrl, '', 512);
 
     options.logger.info('Wechat Mini Game login request received.', {
       requestId,
       gameId: gameId || undefined,
       hasCode: Boolean(code),
       displayName,
+      hasAvatarUrl: Boolean(avatarUrl),
     });
 
     if (!isValidGameId(gameId)) {
@@ -60,6 +63,7 @@ export function registerAuthRoutes(app: Express, tokenService: AuthTokenService,
         displayName,
         roles: ['player'],
         gameId,
+        avatarUrl,
       });
 
       options.logger.info('Wechat Mini Game login succeeded.', {
@@ -67,6 +71,7 @@ export function registerAuthRoutes(app: Express, tokenService: AuthTokenService,
         gameId,
         userId,
         hasUnionid: Boolean(session.unionid),
+        hasAvatarUrl: Boolean(avatarUrl),
       });
 
       response.json({
@@ -76,6 +81,7 @@ export function registerAuthRoutes(app: Express, tokenService: AuthTokenService,
         user: {
           id: userId,
           displayName,
+          avatarUrl,
         },
       } satisfies WechatMiniGameLoginResponse);
     } catch (error) {

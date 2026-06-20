@@ -15,23 +15,43 @@ export function getCachedAuthSession(app, options = {}) {
 
 export async function loginWechatMiniGame(app, options = {}) {
   const gameId = getGameId(options);
+  const userProfile = normalizeUserProfile(options.userInfo);
   const loginInfo = await app.platformLogin();
   if (!loginInfo || !loginInfo.code) {
     throw new Error('wx.login did not return a code.');
   }
 
-  const response = await app.request({
-    url: `${getServerBaseUrl(options)}/auth/wechat/minigame/login`,
-    method: 'POST',
-    header: {
-      'content-type': 'application/json',
-    },
-    data: {
-      gameId,
-      code: loginInfo.code,
-      name: options.name || 'player',
-    },
+  const loginUrl = `${getServerBaseUrl(options)}/auth/wechat/minigame/login`;
+  console.info('[wx-mahjong] wechat login request', {
+    gameId,
+    url: loginUrl,
+    hasAvatarUrl: Boolean(userProfile.avatarUrl),
   });
+
+  let response = null;
+  try {
+    response = await app.request({
+      url: loginUrl,
+      method: 'POST',
+      header: {
+        'content-type': 'application/json',
+      },
+      data: {
+        gameId,
+        code: loginInfo.code,
+        name: options.name || userProfile.nickName || 'player',
+        avatarUrl: userProfile.avatarUrl || '',
+      },
+    });
+  } catch (error) {
+    console.warn('[wx-mahjong] wechat login request failed', {
+      gameId,
+      url: loginUrl,
+      errMsg: error && error.errMsg,
+      errno: error && error.errno,
+    });
+    throw error;
+  }
 
   const data = response && response.data;
   if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data || !data.ok || !data.token) {
@@ -58,4 +78,12 @@ function getServerBaseUrl(options) {
 
 function getGameId(options) {
   return String(options.gameId || globalThis.__WX_MAHJONG_GAME_ID__ || GAME_ID);
+}
+
+function normalizeUserProfile(value) {
+  const userInfo = value && value.userInfo ? value.userInfo : value;
+  return {
+    nickName: (userInfo && userInfo.nickName) || '',
+    avatarUrl: (userInfo && userInfo.avatarUrl) || '',
+  };
 }

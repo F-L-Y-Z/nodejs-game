@@ -5,6 +5,7 @@ export type AuthContext = {
   displayName: string;
   roles: AuthRole[];
   gameId?: string;
+  avatarUrl?: string;
 };
 
 export type TokenVerifier = (token: string | undefined) => Promise<AuthContext>;
