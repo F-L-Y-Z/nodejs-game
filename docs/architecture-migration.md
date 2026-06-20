@@ -20,31 +20,24 @@ packages/
 
 依赖方向保持为 `apps/* -> packages/*`。`packages` 不依赖具体业务应用；麻将规则、房间生命周期和 AI 陪玩属于业务代码，保留在 `apps/server`。
 
-## Colyseus 迁移步骤
+## Colyseus 迁移状态
 
-1. 服务端注册 `mahjong_room`，使用 Colyseus Room 生命周期管理连接。
-2. `onAuth` 校验登录 token，禁止客户端伪造 `userId`。
-3. `onJoin` 根据 `userId` 恢复座位或替换同账号旧连接。
-4. 客户端通过 Colyseus SDK 创建/加入房间，并监听 `mahjong_snapshot`。
-5. 删除旧的 `/mahjong/rooms` HTTP 轮询和 `/mahjong/ws` 自定义 WebSocket。
-6. 验证 `/colyseus` monitor 能看到真实 `mahjong_room` 实例。
-
-## 迁移期状态
-
-- 服务端已经新增 `apps/server/src/rooms/mahjong-room.ts`，并注册为 `mahjong_room`。
-- `packages/shared` 已新增 `ROOM_NAMES.Mahjong`，旧 `ROOM_NAMES.Game` 暂时保留为兼容别名。
-- 迁移期 HTTP 好友房状态已拆到 `apps/server/src/mahjong/mahjong-lobby.ts`，`routes.ts` 只保留 HTTP 适配。
-- 微信小游戏客户端还没有接入 Colyseus SDK；当前环境访问 npm registry/npmmirror 被 allowlist 拦截，无法下载 `colyseus.js`，因此客户端仍保留自定义 WebSocket/HTTP 兜底链路。
+- [x] 服务端注册 `mahjong_room`，使用 Colyseus Room 生命周期管理连接。
+- [x] `onAuth` 校验登录 token，禁止客户端伪造 `userId`。
+- [x] `onJoin` 根据 `userId` 恢复座位或替换同账号旧连接。
+- [x] 客户端通过 Colyseus SDK 创建/加入房间，并监听 `mahjong_snapshot`。
+- [x] 删除旧的 `/mahjong/rooms` HTTP 轮询和 `/mahjong/ws` 自定义 WebSocket。
+- [x] `/colyseus` monitor 展示真实 `mahjong_room` 实例。
 
 ## 客户端 SDK 依赖
 
-`colyseus.js` 应安装到微信小游戏客户端包：
+`colyseus.js` 安装在微信小游戏客户端包：
 
 ```bash
 pnpm --filter @repo/wx-mahjong add colyseus.js@^0.17
 ```
 
-不要在 SDK 未实际安装成功时把 `colyseus.js` 留在 `apps/wx-mahjong/package.json` 或 `pnpm-lock.yaml` 中，否则后续 `pnpm install` 会在离线/受限网络环境下失败。依赖可用后，再新增客户端连接封装：
+当前客户端直接在 `main-controller.js` 中使用 Colyseus SDK。后续如果连接逻辑继续增长，再拆到独立封装：
 
 ```txt
 apps/wx-mahjong/src/network/colyseus-client.js

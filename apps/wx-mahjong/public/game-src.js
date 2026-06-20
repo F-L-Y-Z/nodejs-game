@@ -10077,8 +10077,7 @@ Check @type() annotation`);
   }
   function getColyseusEndpoint() {
     const baseUrl = getServerBaseUrl2();
-    const endpoint = baseUrl.indexOf("https://") === 0 ? `wss://${baseUrl.slice("https://".length)}` : baseUrl.indexOf("http://") === 0 ? `ws://${baseUrl.slice("http://".length)}` : baseUrl;
-    return `${endpoint}/colyseus-ws`;
+    return baseUrl.indexOf("https://") === 0 ? `wss://${baseUrl.slice("https://".length)}` : baseUrl.indexOf("http://") === 0 ? `ws://${baseUrl.slice("http://".length)}` : baseUrl;
   }
   function mapColyseusErrorStatus(code) {
     if (code === "account_replaced" || code === 4409) return 409;

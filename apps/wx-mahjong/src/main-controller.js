@@ -230,12 +230,11 @@ function getServerBaseUrl() {
 
 function getColyseusEndpoint() {
   const baseUrl = getServerBaseUrl()
-  const endpoint = baseUrl.indexOf('https://') === 0
+  return baseUrl.indexOf('https://') === 0
     ? `wss://${baseUrl.slice('https://'.length)}`
     : baseUrl.indexOf('http://') === 0
       ? `ws://${baseUrl.slice('http://'.length)}`
       : baseUrl
-  return `${endpoint}/colyseus-ws`
 }
 
 function mapColyseusErrorStatus(code) {

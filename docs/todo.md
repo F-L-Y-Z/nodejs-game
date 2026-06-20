@@ -34,9 +34,10 @@
 ## P1 联机体验核心
 
 - [x] 使用 WebSocket 通信
-  - [x] 进入牌桌后优先连接 `/mahjong/ws`
-  - [x] WebSocket 断开时回退到 HTTP 轮询
-  - [x] 服务端房间变更后主动推送各玩家视角快照
+  - [x] 客户端通过 `colyseus.js` 连接 Colyseus `mahjong_room`
+  - [x] 通过 `mahjong_action` 提交动作
+  - [x] 通过 `mahjong_snapshot` 接收各玩家视角快照
+  - [x] 客户端已移除 HTTP 轮询兜底
 - [x] 在当前操作的玩家头像处增加全员可见的超时倒计时
   - [x] 服务端下发 `turnDeadlineAt`
   - [x] 客户端在当前操作玩家名称旁展示剩余秒数
@@ -51,20 +52,19 @@
   - [x] 使用 `onAuth` 校验 token
   - [x] 使用 `onJoin`/`onLeave` 管理座位恢复、替换登录和退出
   - [x] 通过 `mahjong_action`/`mahjong_snapshot` 通信
-- [ ] 客户端接入 `colyseus.js`
-  - [ ] 当前阻塞：当前环境访问 npm registry/npmmirror 被 allowlist 拦截，无法下载 `colyseus.js`
-  - [ ] 依赖可下载后执行 `pnpm --filter @repo/wx-mahjong add colyseus.js@^0.17`
-  - [ ] 接入后用 Colyseus SDK 替换自定义 `/mahjong/ws`
-  - [ ] 接入后删除 HTTP 轮询兜底
-- [ ] 服务端删除迁移期兼容层
-  - [ ] 删除 `MahjongLobby` HTTP 房间状态
-  - [ ] 删除自定义 `/mahjong/ws`
-  - [ ] 让 `/colyseus` monitor 正确展示真实麻将房间
-- [ ] 代码分层整理
-  - [x] 通用协议常量放在 `packages/shared`
-  - [x] 迁移期 HTTP 好友房业务状态拆到 `apps/server/src/mahjong/mahjong-lobby.ts`
-  - [ ] 把房间配置、错误码、消息 payload 进一步收敛到 `packages/shared`
-  - [ ] 业务麻将牌桌逻辑保留在 `apps/server`
+- [x] 客户端接入 `colyseus.js`
+  - [x] `apps/wx-mahjong` 已声明 `colyseus.js`
+  - [x] 客户端用 Colyseus SDK 替换自定义 `/mahjong/ws`
+  - [x] 客户端删除 HTTP 轮询兜底
+- [x] 服务端删除迁移期兼容层
+  - [x] 删除 `MahjongLobby` HTTP 房间状态
+  - [x] 删除自定义 `/mahjong/ws`
+  - [x] 客户端已改走 Colyseus 房间，运行时真实房间应出现在 `/colyseus` monitor
+
+## P2 玩法实现的问题
+
+- [ ] 碰牌之后不应触发可胡牌
+- [ ] 听牌时自摸到红中应可胡牌
 
 ## P2 结算与表现
 
