@@ -66,8 +66,8 @@ export default class LobbyView extends Container {
   async handleJoin() {
     const { roomId, password } = await requestJoinInfo();
     if (!roomId) return;
-    if (!/^\d{6}$/.test(roomId)) {
-      this.setStatus('请输入 6 位房间号');
+    if (!/^[a-zA-Z0-9_-]{6,64}$/.test(roomId)) {
+      this.setStatus('请输入有效房间 ID');
       return;
     }
     this.enterRoom({ roomId, password });
