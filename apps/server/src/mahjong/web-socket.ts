@@ -5,7 +5,7 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import { authTokenService } from '../auth/service.js';
-import { isLobbyError, lobby } from './routes.js';
+import { isLobbyError, lobby } from './mahjong-lobby.js';
 import type { MahjongAction } from './mahjong-table.js';
 
 const WS_PATH = '/mahjong/ws';

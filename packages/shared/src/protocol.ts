@@ -1,5 +1,6 @@
 export const ROOM_NAMES = {
-  Game: 'game_room',
+  Mahjong: 'mahjong_room',
+  Game: 'mahjong_room',
 } as const;
 
 export const CLIENT_MESSAGES = {
@@ -22,6 +23,8 @@ export type ServerMessageName = (typeof SERVER_MESSAGES)[keyof typeof SERVER_MES
 export type JoinRoomOptions = {
   token?: string;
   name?: string;
+  password?: string;
+  timeoutSeconds?: number;
 };
 
 export type MoveMessage = {

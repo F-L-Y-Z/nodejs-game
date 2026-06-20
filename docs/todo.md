@@ -45,6 +45,27 @@
   - [x] 房间密码（可选）
   - [x] 超时时间（默认 30 秒）
 
+## P1 架构迁移
+
+- [x] 服务端新增 Colyseus `mahjong_room` 房间类型
+  - [x] 使用 `onAuth` 校验 token
+  - [x] 使用 `onJoin`/`onLeave` 管理座位恢复、替换登录和退出
+  - [x] 通过 `mahjong_action`/`mahjong_snapshot` 通信
+- [ ] 客户端接入 `colyseus.js`
+  - [ ] 当前阻塞：当前环境访问 npm registry/npmmirror 被 allowlist 拦截，无法下载 `colyseus.js`
+  - [ ] 依赖可下载后执行 `pnpm --filter @repo/wx-mahjong add colyseus.js@^0.17`
+  - [ ] 接入后用 Colyseus SDK 替换自定义 `/mahjong/ws`
+  - [ ] 接入后删除 HTTP 轮询兜底
+- [ ] 服务端删除迁移期兼容层
+  - [ ] 删除 `MahjongLobby` HTTP 房间状态
+  - [ ] 删除自定义 `/mahjong/ws`
+  - [ ] 让 `/colyseus` monitor 正确展示真实麻将房间
+- [ ] 代码分层整理
+  - [x] 通用协议常量放在 `packages/shared`
+  - [x] 迁移期 HTTP 好友房业务状态拆到 `apps/server/src/mahjong/mahjong-lobby.ts`
+  - [ ] 把房间配置、错误码、消息 payload 进一步收敛到 `packages/shared`
+  - [ ] 业务麻将牌桌逻辑保留在 `apps/server`
+
 ## P2 结算与表现
 
 - [ ] 任意方胡牌之后需要明牌至全员可见

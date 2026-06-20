@@ -114,9 +114,9 @@ apps/server/src/rooms/game/
   messages.ts
   validators.ts
   commands/
-    MoveCommand.ts
+    move-command.ts
   systems/
-    MovementSystem.ts
+    movement-system.ts
 ```
 
 ## packages 职责

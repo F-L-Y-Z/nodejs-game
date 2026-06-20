@@ -18,7 +18,7 @@
 - 不做房间列表。
 - 不做复杂匹配、段位、观战、邀请记录。
 - 当前先不做持久化，服务重启后房间丢失。
-- 当前微信小游戏客户端优先使用 HTTP 轮询，WebSocket/Colyseus 可作为后续优化。
+- 目标通信通道使用 Colyseus Room；迁移完成前，旧 HTTP/自定义 WebSocket 只作为兼容通道保留。
 
 ## 客户端流程
 
@@ -88,7 +88,41 @@ waiting
 - 退出玩家的准备、活跃实例和房间索引会被清理。
 - 如果最后一名真人退出，房间进入 `closed` 并从内存移除。
 
-## HTTP API
+## Colyseus Room
+
+目标房间类型：
+
+```txt
+mahjong_room
+```
+
+客户端通过 Colyseus SDK `joinOrCreate`/`joinById` 进入房间，`onAuth` 校验 token 后返回可信 `userId`，`onJoin` 使用服务端身份恢复或占用座位。房间内部继续使用固定 4 座麻将桌，不足真人由服务端 AI 补齐。
+
+创建/加入参数：
+
+```json
+{
+  "token": "<auth-token>",
+  "name": "玩家昵称",
+  "password": "1234",
+  "timeoutSeconds": 30
+}
+```
+
+动作统一通过 `mahjong_action` 消息提交：
+
+```json
+{
+  "action": "discard",
+  "index": 3
+}
+```
+
+服务端通过 `mahjong_snapshot` 向每个连接发送该玩家自己的视角快照；错误通过 `mahjong_error` 返回。
+
+## 迁移期 HTTP API
+
+以下接口是迁移期兼容层。客户端切到 Colyseus SDK 后，应删除旧 HTTP 轮询和自定义 `/mahjong/ws` 通道。
 
 ### 创建房间
 
@@ -206,7 +240,7 @@ restart
 - 其他玩家只给手牌数量、弃牌、副露。
 - `currentPlayer`、`lastDiscard.from`、`winner` 都转换为当前玩家视角座位。
 
-客户端进入牌桌后优先连接 WebSocket：
+迁移期客户端进入牌桌后优先连接自定义 WebSocket：
 
 ```txt
 GET /mahjong/ws?token=<token>&roomId=<roomId>&clientId=<clientId>
@@ -222,7 +256,7 @@ WebSocket 消息均使用 JSON：
 }
 ```
 
-服务端会在房间状态变化后，向每个 WebSocket 连接推送该玩家自己的视角快照。WebSocket 断开时，客户端回退到每 900ms HTTP 轮询。
+服务端会在房间状态变化后，向每个 WebSocket 连接推送该玩家自己的视角快照。自定义 WebSocket 断开时，迁移期客户端回退到每 900ms HTTP 轮询。Colyseus SDK 接入完成后，不再保留这条兜底链路。
 
 快照包含倒计时和配置摘要：
 
@@ -257,8 +291,8 @@ WebSocket 消息均使用 JSON：
 
 ## 后续演进
 
-- 改为 WebSocket 推送，减少轮询延迟。
-- 增加房间等待态、准备态、房主开始。
+- 客户端接入 Colyseus SDK，替换自定义 WebSocket 和 HTTP 轮询。
+- 删除迁移期 `MahjongLobby` HTTP 房间管理入口，避免两套房间状态并存。
 - 增加房间分享入口。
 - 增加房间过期清理和服务端持久化。
 - 增加断线重连回原座位。

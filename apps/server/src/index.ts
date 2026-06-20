@@ -13,7 +13,7 @@ import { registerAuthRoutes } from './auth/routes.js';
 import { authRouteLogger, authTokenService, authWechatLogger } from './auth/service.js';
 import { registerMahjongRoutes } from './mahjong/routes.js';
 import { registerMahjongWebSocket } from './mahjong/web-socket.js';
-import { GameRoom } from './rooms/game-room.js';
+import { MahjongRoom } from './rooms/mahjong-room.js';
 
 const port = readNumberEnv('PORT', 2567);
 const logger = createConsoleLogger(SERVICE_NAME);
@@ -49,7 +49,7 @@ const gameServer = new Server({
   transport: colyseusTransport,
 });
 
-gameServer.define(ROOM_NAMES.Game, GameRoom);
+gameServer.define(ROOM_NAMES.Mahjong, MahjongRoom);
 
 app.use('/colyseus', monitor());
 
