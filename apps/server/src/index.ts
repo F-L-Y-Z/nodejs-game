@@ -11,6 +11,7 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { registerAuthRoutes } from './auth/routes.js';
 import { authRouteLogger, authTokenService, authWechatLogger } from './auth/service.js';
+import { registerMahjongRoutes } from './mahjong/routes.js';
 import { GameRoom } from './rooms/GameRoom.js';
 
 const port = readNumberEnv('PORT', 2567);
@@ -28,6 +29,7 @@ registerAuthRoutes(app, authTokenService, {
   logger: authRouteLogger,
   wechatLogger: authWechatLogger,
 });
+registerMahjongRoutes(app);
 
 const httpServer = createServer(app);
 

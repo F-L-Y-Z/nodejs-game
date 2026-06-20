@@ -5,11 +5,14 @@ export const ROOM_NAMES = {
 export const CLIENT_MESSAGES = {
   Move: 'move',
   Ready: 'ready',
+  MahjongAction: 'mahjong_action',
 } as const;
 
 export const SERVER_MESSAGES = {
   PlayerJoined: 'player_joined',
   PlayerLeft: 'player_left',
+  MahjongSnapshot: 'mahjong_snapshot',
+  MahjongError: 'mahjong_error',
 } as const;
 
 export type RoomName = (typeof ROOM_NAMES)[keyof typeof ROOM_NAMES];
@@ -24,6 +27,14 @@ export type JoinRoomOptions = {
 export type MoveMessage = {
   x: number;
   y: number;
+};
+
+export type MahjongActionName = 'discard' | 'pass' | 'peng' | 'gang' | 'hu' | 'restart';
+
+export type MahjongActionMessage = {
+  action: MahjongActionName;
+  index?: number;
+  tile?: string;
 };
 
 export type PlayerJoinedMessage = {

@@ -14,8 +14,7 @@ export default class MainView extends Container {
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
     this.board = this.addChild(new BoardGraphic(app.assets));
     this.board.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
-    this.controller = new MainController(this);
-    if (authSession) this.controller.setAuthSession(authSession);
+    this.controller = new MainController(this, authSession);
   }
 
   renderState(state) {
