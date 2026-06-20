@@ -10,6 +10,9 @@ const allowDevTokens = readBooleanEnv('AUTH_ALLOW_DEV_TOKENS', true);
 const AUTO_DELAY_MS = 650;
 const STALE_CLIENT_MS = 120_000;
 const ROOM_ID_LENGTH = 6;
+const DEFAULT_TIMEOUT_SECONDS = 30;
+const MIN_TIMEOUT_SECONDS = 5;
+const MAX_TIMEOUT_SECONDS = 120;
 
 type MahjongRoomStatus = 'waiting' | 'playing' | 'settling' | 'closed';
 
@@ -22,6 +25,9 @@ type MahjongRoom = {
   activeClientIds: Map<string, string>;
   readyUserIds: Set<string>;
   autoTimer: NodeJS.Timeout | null;
+  password: string;
+  timeoutSeconds: number;
+  turnDeadlineAt: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -40,25 +46,45 @@ type LobbyActionResult = {
   message?: string;
 };
 
-class MahjongLobby {
+type RoomListener = (roomId: string) => void;
+
+export class MahjongLobby {
   private rooms = new Map<string, MahjongRoom>();
   private roomIdByUserId = new Map<string, string>();
+  private listeners = new Set<RoomListener>();
 
-  createRoom(auth: AuthContext, name: string, clientId: string): { roomId: string; state: unknown } | LobbyError {
+  onRoomChanged(listener: RoomListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  createRoom(
+    auth: AuthContext,
+    name: string,
+    clientId: string,
+    options: { password?: string; timeoutSeconds?: number } = {},
+  ): { roomId: string; state: unknown } | LobbyError {
     this.pruneAllRooms();
     const existingRoomId = this.roomIdByUserId.get(auth.userId);
     if (existingRoomId && this.rooms.has(existingRoomId)) {
       return { status: 409, code: 'already_in_room', message: '你已在其他房间中，请先回到原房间。' };
     }
-    const room = this.createRoomRecord(auth.userId);
+    const room = this.createRoomRecord(auth.userId, options);
     const joined = this.joinRoomRecord(room, auth, name, clientId);
     if (!joined) {
       throw new Error('创建房间失败。');
     }
+    this.notifyRoomChanged(room.id);
     return { roomId: room.id, state: this.snapshotFor(room, auth.userId) };
   }
 
-  joinRoom(roomId: string, auth: AuthContext, name: string, clientId: string): { roomId: string; state: unknown } | LobbyError {
+  joinRoom(
+    roomId: string,
+    auth: AuthContext,
+    name: string,
+    clientId: string,
+    options: { password?: string } = {},
+  ): { roomId: string; state: unknown } | LobbyError {
     this.pruneAllRooms();
     const room = this.rooms.get(roomId);
     if (!room || room.status === 'closed') {
@@ -68,9 +94,13 @@ class MahjongLobby {
     if (existingRoomId && existingRoomId !== roomId && this.rooms.has(existingRoomId)) {
       return { status: 409, code: 'already_in_room', message: '你已在其他房间中，请先回到原房间。' };
     }
+    if (room.password && room.password !== (options.password || '')) {
+      return { status: 403, code: 'invalid_room_password', message: '房间密码错误。' };
+    }
     if (!this.joinRoomRecord(room, auth, name, clientId)) {
       return { status: 409, code: 'room_full', message: '房间已满。' };
     }
+    this.notifyRoomChanged(room.id);
     return { roomId: room.id, state: this.snapshotFor(room, auth.userId) };
   }
 
@@ -110,10 +140,12 @@ class MahjongLobby {
     room.updatedAt = Date.now();
     this.syncRoomStatus(room);
     this.scheduleAuto(room);
+    if (changed) this.refreshTurnDeadline(room, true);
+    if (changed) this.notifyRoomChanged(room.id);
     return { roomId: room.id, state: this.snapshotFor(room, auth.userId), changed };
   }
 
-  private createRoomRecord(ownerUserId: string): MahjongRoom {
+  private createRoomRecord(ownerUserId: string, options: { password?: string; timeoutSeconds?: number }): MahjongRoom {
     const room: MahjongRoom = {
       id: this.generateRoomId(),
       ownerUserId,
@@ -123,6 +155,9 @@ class MahjongLobby {
       activeClientIds: new Map(),
       readyUserIds: new Set(),
       autoTimer: null,
+      password: options.password || '',
+      timeoutSeconds: options.timeoutSeconds || DEFAULT_TIMEOUT_SECONDS,
+      turnDeadlineAt: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -174,14 +209,33 @@ class MahjongLobby {
 
   private scheduleAuto(room: MahjongRoom): void {
     this.clearAutoTimer(room);
-    if (room.status !== 'playing' || !room.table.shouldAutoRun()) return;
+    if (room.status !== 'playing') return;
+
+    if (room.table.shouldAutoRun()) {
+      room.autoTimer = setTimeout(() => {
+        room.autoTimer = null;
+        const changed = room.table.runAutoStep();
+        if (changed) room.updatedAt = Date.now();
+        this.syncRoomStatus(room);
+        this.refreshTurnDeadline(room, changed);
+        if (changed) this.notifyRoomChanged(room.id);
+        this.scheduleAuto(room);
+      }, AUTO_DELAY_MS);
+      return;
+    }
+
+    this.refreshTurnDeadline(room, false);
+    if (!room.turnDeadlineAt) return;
+    const delay = Math.max(0, room.turnDeadlineAt - Date.now());
     room.autoTimer = setTimeout(() => {
       room.autoTimer = null;
-      const changed = room.table.runAutoStep();
+      const changed = room.table.runAutoStep(true);
       if (changed) room.updatedAt = Date.now();
       this.syncRoomStatus(room);
+      this.refreshTurnDeadline(room, changed);
+      if (changed) this.notifyRoomChanged(room.id);
       this.scheduleAuto(room);
-    }, AUTO_DELAY_MS);
+    }, delay);
   }
 
   private clearAutoTimer(room: MahjongRoom): void {
@@ -215,6 +269,7 @@ class MahjongLobby {
       room.readyUserIds.clear();
       room.status = 'playing';
       room.table.startRoundKeepingHumans();
+      this.refreshTurnDeadline(room, true);
     }
     return true;
   }
@@ -235,8 +290,10 @@ class MahjongLobby {
     this.roomIdByUserId.delete(userId);
     room.table.removeHuman(userId);
     room.updatedAt = Date.now();
+    room.turnDeadlineAt = null;
     this.reassignOwner(room);
     this.syncRoomStatus(room);
+    this.notifyRoomChanged(room.id);
 
     return {
       roomId: room.id,
@@ -273,7 +330,18 @@ class MahjongLobby {
       if (ownerSnapshot.phase === 'round-over') {
         room.status = 'settling';
         room.readyUserIds.clear();
+        room.turnDeadlineAt = null;
       }
+    }
+  }
+
+  private refreshTurnDeadline(room: MahjongRoom, reset: boolean): void {
+    if (room.status !== 'playing' || !room.table.shouldWaitForHumanAction()) {
+      room.turnDeadlineAt = null;
+      return;
+    }
+    if (reset || !room.turnDeadlineAt || room.turnDeadlineAt <= Date.now()) {
+      room.turnDeadlineAt = Date.now() + room.timeoutSeconds * 1000;
     }
   }
 
@@ -309,6 +377,12 @@ class MahjongLobby {
       readyCount: waiting ? readySeatCount : seatCount,
       requiredReadyCount: seatCount,
       humanCount: room.table.getHumanCount(),
+      serverTime: Date.now(),
+      turnDeadlineAt: room.turnDeadlineAt,
+      config: {
+        timeoutSeconds: room.timeoutSeconds,
+        hasPassword: Boolean(room.password),
+      },
       actions: waiting ? { ready: !isReady, leave: true } : state.actions,
       message: waiting
         ? isReady
@@ -325,10 +399,15 @@ class MahjongLobby {
       this.roomIdByUserId.delete(userId);
     });
     this.rooms.delete(room.id);
+    this.notifyRoomChanged(room.id);
+  }
+
+  private notifyRoomChanged(roomId: string): void {
+    this.listeners.forEach((listener) => listener(roomId));
   }
 }
 
-const lobby = new MahjongLobby();
+export const lobby = new MahjongLobby();
 
 export function registerMahjongRoutes(app: Express): void {
   app.post('/mahjong/rooms', async (request, response) => {
@@ -338,7 +417,10 @@ export function registerMahjongRoutes(app: Express): void {
     const name = normalizeName(request.body?.name, auth.displayName);
     const clientId = readClientId(request);
     try {
-      const result = lobby.createRoom(auth, name, clientId);
+      const result = lobby.createRoom(auth, name, clientId, {
+        password: normalizePassword(request.body?.password),
+        timeoutSeconds: normalizeTimeoutSeconds(request.body?.timeoutSeconds),
+      });
       if (isLobbyError(result)) {
         sendLobbyError(response, result);
         return;
@@ -360,7 +442,9 @@ export function registerMahjongRoutes(app: Express): void {
     }
 
     const name = normalizeName(request.body?.name, auth.displayName);
-    const result = lobby.joinRoom(roomId, auth, name, readClientId(request));
+    const result = lobby.joinRoom(roomId, auth, name, readClientId(request), {
+      password: normalizePassword(request.body?.password),
+    });
     if (isLobbyError(result)) {
       sendLobbyError(response, result);
       return;
@@ -414,7 +498,7 @@ export function registerMahjongRoutes(app: Express): void {
   });
 }
 
-function isLobbyError(value: unknown): value is LobbyError {
+export function isLobbyError(value: unknown): value is LobbyError {
   return typeof value === 'object' && value !== null && 'status' in value && 'code' in value && 'message' in value;
 }
 
@@ -457,6 +541,16 @@ function readClientId(request: Request): string {
 function normalizeName(value: unknown, fallback: string): string {
   const text = typeof value === 'string' ? value.trim() : '';
   return (text || fallback || 'player').slice(0, 24);
+}
+
+function normalizePassword(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 32) : '';
+}
+
+function normalizeTimeoutSeconds(value: unknown): number {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return DEFAULT_TIMEOUT_SECONDS;
+  return Math.max(MIN_TIMEOUT_SECONDS, Math.min(MAX_TIMEOUT_SECONDS, Math.round(numberValue)));
 }
 
 function normalizeRoomId(value: unknown): string {

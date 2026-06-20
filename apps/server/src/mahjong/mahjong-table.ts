@@ -220,26 +220,30 @@ export class MahjongTable {
     return false;
   }
 
-  runAutoStep(): boolean {
+  runAutoStep(forceHumans = false): boolean {
     if (this.phase === 'round-over') return false;
 
     if (this.phase === 'waiting-action') {
       const humanAction = this.pendingActions.find((action) => this.players[action.player].clientId);
-      if (humanAction) return false;
+      if (humanAction && !forceHumans) return false;
+      if (humanAction && forceHumans) {
+        this.pendingActions = this.pendingActions.filter((action) => !this.players[action.player].clientId);
+        this.message = '操作超时，自动过。';
+      }
       this.resolvePendingActions();
       return true;
     }
 
-    if (this.players[this.currentPlayer].clientId) return false;
+    if (this.players[this.currentPlayer].clientId && !forceHumans) return false;
 
     const playerIndex = this.currentPlayer;
-    if (this.canCurrentHu(playerIndex)) {
+    if (!forceHumans && this.canCurrentHu(playerIndex)) {
       this.finishRound(playerIndex, `${this.players[playerIndex].name}自摸胡牌`);
       return true;
     }
 
     const gangTile = this.getConcealedGangTiles(playerIndex)[0];
-    if (gangTile) {
+    if (!forceHumans && gangTile) {
       this.concealedGang(playerIndex, gangTile);
       return true;
     }
@@ -253,6 +257,14 @@ export class MahjongTable {
       return !this.pendingActions.some((action) => this.players[action.player].clientId);
     }
     return !this.players[this.currentPlayer].clientId;
+  }
+
+  shouldWaitForHumanAction(): boolean {
+    if (this.phase === 'round-over') return false;
+    if (this.phase === 'waiting-action') {
+      return this.pendingActions.some((action) => this.players[action.player].clientId);
+    }
+    return this.phase === 'waiting-discard' && Boolean(this.players[this.currentPlayer].clientId);
   }
 
   private sortHands(): void {

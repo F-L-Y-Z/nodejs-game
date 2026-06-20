@@ -31,6 +31,9 @@ export default class MainView extends Container {
     if (this.width && this.height && this.controlSizeKey !== sizeKey) {
       this.rebuildControls();
     }
+    if (this.state.turnDeadlineAt) {
+      this.board.invalidatePaint();
+    }
   }
 
   rebuildControls() {

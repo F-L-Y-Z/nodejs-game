@@ -42,7 +42,7 @@ export default class LobbyView extends Container {
       }),
     );
     this.createButton.setLayout(anchor({ anchor: 'top', y: 260, width: 170, height: 44 }));
-    this.createButton.on('tap', () => this.enterRoom({ createRoom: true }));
+    this.createButton.on('tap', () => this.handleCreate());
 
     this.joinButton = this.addChild(
       new Button('加入房间', {
@@ -64,13 +64,19 @@ export default class LobbyView extends Container {
   }
 
   async handleJoin() {
-    const roomId = await requestRoomId();
+    const { roomId, password } = await requestJoinInfo();
     if (!roomId) return;
     if (!/^\d{6}$/.test(roomId)) {
       this.setStatus('请输入 6 位房间号');
       return;
     }
-    this.enterRoom({ roomId });
+    this.enterRoom({ roomId, password });
+  }
+
+  async handleCreate() {
+    const config = await requestRoomConfig();
+    if (!config) return;
+    this.enterRoom(Object.assign({ createRoom: true }, config));
   }
 
   enterRoom(options) {
@@ -96,26 +102,67 @@ export default class LobbyView extends Container {
   }
 }
 
-function requestRoomId() {
+function requestJoinInfo() {
   if (globalThis.wx && globalThis.wx.showModal) {
     return new Promise((resolve) => {
       globalThis.wx.showModal({
         title: '加入房间',
-        placeholderText: '请输入 6 位房间号',
+        placeholderText: '房间号,密码可选',
         editable: true,
         success(result) {
-          resolve(result && result.confirm ? String(result.content || '').trim() : '');
+          resolve(result && result.confirm ? parseJoinInfo(result.content) : { roomId: '', password: '' });
         },
         fail() {
-          resolve('');
+          resolve({ roomId: '', password: '' });
         },
       });
     });
   }
 
   if (globalThis.prompt) {
-    return Promise.resolve(String(globalThis.prompt('请输入 6 位房间号') || '').trim());
+    return Promise.resolve(parseJoinInfo(globalThis.prompt('房间号,密码可选') || ''));
   }
 
-  return Promise.resolve('');
+  return Promise.resolve({ roomId: '', password: '' });
+}
+
+function requestRoomConfig() {
+  if (globalThis.wx && globalThis.wx.showModal) {
+    return new Promise((resolve) => {
+      globalThis.wx.showModal({
+        title: '创建房间',
+        placeholderText: '超时秒数,密码可选，如 30,1234',
+        editable: true,
+        success(result) {
+          resolve(result && result.confirm ? parseRoomConfig(result.content) : null);
+        },
+        fail() {
+          resolve(null);
+        },
+      });
+    });
+  }
+
+  if (globalThis.prompt) {
+    return Promise.resolve(parseRoomConfig(globalThis.prompt('超时秒数,密码可选，如 30,1234') || ''));
+  }
+
+  return Promise.resolve({ timeoutSeconds: 30, password: '' });
+}
+
+function parseJoinInfo(value) {
+  const parts = String(value || '').split(',').map((item) => item.trim());
+  return {
+    roomId: parts[0] || '',
+    password: parts[1] || '',
+  };
+}
+
+function parseRoomConfig(value) {
+  const parts = String(value || '').split(',').map((item) => item.trim());
+  const timeoutSeconds = Number(parts[0] || 30);
+  return {
+    timeoutSeconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30,
+    password: parts[1] || '',
+  };
 }

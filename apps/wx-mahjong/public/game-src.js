@@ -1991,6 +1991,8 @@
       this.online = false;
       this.pollTimer = null;
       this.requestingSnapshot = false;
+      this.socket = null;
+      this.socketOpen = false;
       if (authSession && authSession.token) {
         this.connect();
       } else {
@@ -2011,7 +2013,9 @@
         const data = await this.request(this.getJoinPath(), {
           method: "POST",
           data: {
-            name: user.displayName || user.name || "player"
+            name: user.displayName || user.name || "player",
+            password: this.roomOptions.password || "",
+            timeoutSeconds: this.roomOptions.timeoutSeconds || 30
           }
         });
         this.online = true;
@@ -2019,6 +2023,7 @@
         this.localServer = null;
         this.renderResponseState(data);
         this.startPolling();
+        this.connectWebSocket();
       } catch (error) {
         console.warn("[wx-mahjong] multiplayer connect failed", error);
         if (error && error.statusCode === 401 && this.view.backToLogin) {
@@ -2062,6 +2067,12 @@
     }
     async sendAction(action, payload = {}) {
       if (!this.roomId) return;
+      if (this.socketOpen && this.socket) {
+        console.info("[wx-mahjong] websocket action", { action, roomId: this.roomId, clientId: this.clientId });
+        this.socket.send(JSON.stringify(Object.assign({ type: "action", action }, payload)));
+        return;
+      }
+      console.warn("[wx-mahjong] http action fallback", { action, roomId: this.roomId, clientId: this.clientId });
       try {
         const data = await this.request(this.getActionPath(), {
           method: "POST",
@@ -2084,10 +2095,12 @@
     }
     startPolling() {
       this.stopPolling();
+      console.warn("[wx-mahjong] http polling start", { roomId: this.roomId, clientId: this.clientId });
       this.pollTimer = setInterval(() => this.pollSnapshot(), POLL_INTERVAL_MS);
     }
     stopPolling() {
       if (!this.pollTimer) return;
+      console.info("[wx-mahjong] http polling stop", { roomId: this.roomId, clientId: this.clientId });
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
@@ -2124,6 +2137,71 @@
       }
       return data;
     }
+    connectWebSocket() {
+      if (!this.online || !this.roomId || !this.authSession || !this.authSession.token) return;
+      this.closeSocket();
+      const url = `${getWsBaseUrl()}/mahjong/ws?token=${encodeURIComponent(this.authSession.token)}&roomId=${encodeURIComponent(this.roomId)}&clientId=${encodeURIComponent(this.clientId)}`;
+      console.info("[wx-mahjong] websocket connecting", { url: maskSocketUrl(url), roomId: this.roomId, clientId: this.clientId });
+      const socket = createSocket(url);
+      if (!socket) {
+        console.warn("[wx-mahjong] websocket unavailable, keep http polling");
+        return;
+      }
+      this.socket = socket;
+      socket.onOpen(() => {
+        console.info("[wx-mahjong] websocket open", { roomId: this.roomId, clientId: this.clientId });
+        this.socketOpen = true;
+        this.stopPolling();
+      });
+      socket.onMessage((message) => {
+        this.handleSocketMessage(message);
+      });
+      socket.onClose((event) => {
+        console.warn("[wx-mahjong] websocket close", { roomId: this.roomId, clientId: this.clientId, event });
+        this.socketOpen = false;
+        this.socket = null;
+        if (this.online) this.startPolling();
+      });
+      socket.onError((error) => {
+        console.warn("[wx-mahjong] websocket error", { roomId: this.roomId, clientId: this.clientId, error });
+        this.socketOpen = false;
+        this.socket = null;
+        if (this.online) this.startPolling();
+      });
+    }
+    handleSocketMessage(rawMessage) {
+      let data = null;
+      try {
+        data = JSON.parse(typeof rawMessage === "string" ? rawMessage : rawMessage.data);
+      } catch (error) {
+        console.warn("[wx-mahjong] invalid websocket message", rawMessage);
+        return;
+      }
+      if (data.type === "snapshot") {
+        this.renderResponseState(data);
+        return;
+      }
+      if (data.type === "action_result") {
+        this.renderResponseState(data);
+        if (data.ok === false && this.view.showError) {
+          this.view.showError(data.message || "\u5F53\u524D\u4E0D\u80FD\u6267\u884C\u8BE5\u64CD\u4F5C\u3002");
+        }
+        return;
+      }
+      if (data.type === "left") {
+        this.closeSocket();
+        this.stopPolling();
+        this.online = false;
+        if (this.view.backToLobby) this.view.backToLobby(data.message || "\u5DF2\u9000\u51FA\u623F\u95F4\u3002");
+        return;
+      }
+      if (data.type === "error") {
+        const error = new Error(data.message || "WebSocket request failed.");
+        error.code = data.code;
+        error.statusCode = data.code === "account_replaced" ? 409 : data.code === "room_not_found" ? 404 : 400;
+        this.handleRequestError(error);
+      }
+    }
     renderResponseState(data) {
       if (data && data.roomId) this.roomId = data.roomId;
       if (data && data.state) {
@@ -2133,6 +2211,7 @@
     }
     startLocal(message = "") {
       this.stopPolling();
+      this.closeSocket();
       this.online = false;
       this.localServer = new MahjongServer((state) => {
         if (message) {
@@ -2146,6 +2225,7 @@
       const statusCode = error && error.statusCode;
       if (statusCode === 401) {
         this.stopPolling();
+        this.closeSocket();
         this.online = false;
         if (this.view.backToLogin) {
           this.view.backToLogin("\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55\u3002");
@@ -2154,6 +2234,7 @@
       }
       if (statusCode === 409 && error.code === "account_replaced") {
         this.stopPolling();
+        this.closeSocket();
         this.online = false;
         if (this.view.backToLobby) {
           this.view.backToLobby(error.message || "\u8D26\u53F7\u5DF2\u5728\u5176\u4ED6\u8BBE\u5907\u8FDB\u5165\u8BE5\u623F\u95F4\u3002");
@@ -2162,6 +2243,7 @@
       }
       if (statusCode === 404 || statusCode === 410) {
         this.stopPolling();
+        this.closeSocket();
         this.online = false;
         if (this.view.backToLobby) {
           this.view.backToLobby(error.message || "\u623F\u95F4\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
@@ -2173,6 +2255,13 @@
         return;
       }
       this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+    }
+    closeSocket() {
+      if (!this.socket) return;
+      const socket = this.socket;
+      this.socket = null;
+      this.socketOpen = false;
+      socket.close();
     }
     getJoinPath() {
       if (this.roomId) return `/mahjong/rooms/${this.roomId}/join`;
@@ -2188,6 +2277,64 @@
   function getServerBaseUrl2() {
     const value = globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL;
     return String(value).replace(/\/+$/, "");
+  }
+  function getWsBaseUrl() {
+    const baseUrl = getServerBaseUrl2();
+    if (baseUrl.indexOf("https://") === 0) return `wss://${baseUrl.slice("https://".length)}`;
+    if (baseUrl.indexOf("http://") === 0) return `ws://${baseUrl.slice("http://".length)}`;
+    return baseUrl;
+  }
+  function maskSocketUrl(url) {
+    return String(url).replace(/token=([^&]+)/, "token=***");
+  }
+  function createSocket(url) {
+    if (globalThis.wx && globalThis.wx.connectSocket) {
+      const task = globalThis.wx.connectSocket({ url });
+      return {
+        send(data) {
+          task.send({ data });
+        },
+        close() {
+          task.close();
+        },
+        onOpen(handler) {
+          task.onOpen(handler);
+        },
+        onMessage(handler) {
+          task.onMessage((event) => handler(event.data));
+        },
+        onClose(handler) {
+          task.onClose(handler);
+        },
+        onError(handler) {
+          task.onError(handler);
+        }
+      };
+    }
+    if (globalThis.WebSocket) {
+      const socket = new globalThis.WebSocket(url);
+      return {
+        send(data) {
+          socket.send(data);
+        },
+        close() {
+          socket.close();
+        },
+        onOpen(handler) {
+          socket.addEventListener("open", handler);
+        },
+        onMessage(handler) {
+          socket.addEventListener("message", (event) => handler(event.data));
+        },
+        onClose(handler) {
+          socket.addEventListener("close", handler);
+        },
+        onError(handler) {
+          socket.addEventListener("error", handler);
+        }
+      };
+    }
+    return null;
   }
   function createStatusState(message) {
     return {
@@ -2232,6 +2379,9 @@
   var MELD_GAP = 8;
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+  function getRemainingSeconds(deadlineAt) {
+    return Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1e3));
   }
   function getActionItems(state) {
     const actions = [];
@@ -2563,24 +2713,26 @@
         const pos = PLAYER_POS[index];
         const active = state.currentPlayer === index && state.phase !== "round-over";
         const color = active ? "#ffd86b" : "#dce8de";
+        const countdownText = active && state.turnDeadlineAt ? ` ${getRemainingSeconds(state.turnDeadlineAt)}s` : "";
         const readyText = state.roomStatus === "waiting" || state.roomStatus === "settling" ? ` ${player.isReady ? "\u5DF2\u51C6\u5907" : "\u672A\u51C6\u5907"}` : "";
+        const label = `${player.name}${readyText}${countdownText}`;
         if (pos === "bottom") {
           drawText(
             ctx,
-            `${player.name}${readyText}`,
+            label,
             x + Math.max(18, metrics.handX - 18),
             y + metrics.handY + metrics.tileH / 2,
             13,
             color
           );
         } else if (pos === "top") {
-          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + width / 2, y + metrics.tableTop - 16, 13, color);
+          drawText(ctx, `${label} ${player.handCount}\u5F20`, x + width / 2, y + metrics.tableTop - 16, 13, color);
         } else if (pos === "left") {
           const nameX = metrics.isLandscape ? metrics.tableLeft - 50 : 20;
-          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
+          drawText(ctx, `${label} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
         } else if (pos === "right") {
           const nameX = metrics.isLandscape ? metrics.tableRight + 50 : width - 20;
-          drawText(ctx, `${player.name}${readyText} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
+          drawText(ctx, `${label} ${player.handCount}\u5F20`, x + nameX, y + metrics.centerY - 76, 13, color);
         }
       });
     }
@@ -2648,6 +2800,9 @@
       const sizeKey = `${this.width}x${this.height}`;
       if (this.width && this.height && this.controlSizeKey !== sizeKey) {
         this.rebuildControls();
+      }
+      if (this.state.turnDeadlineAt) {
+        this.board.invalidatePaint();
       }
     }
     rebuildControls() {
@@ -2761,7 +2916,7 @@
         })
       );
       this.createButton.setLayout(anchor({ anchor: "top", y: 260, width: 170, height: 44 }));
-      this.createButton.on("tap", () => this.enterRoom({ createRoom: true }));
+      this.createButton.on("tap", () => this.handleCreate());
       this.joinButton = this.addChild(
         new Button("\u52A0\u5165\u623F\u95F4", {
           background: { fillStyle: "#f2a33a", radius: 6 },
@@ -2780,13 +2935,18 @@
       this.reloginButton.on("tap", () => this.handleRelogin());
     }
     async handleJoin() {
-      const roomId = await requestRoomId();
+      const { roomId, password } = await requestJoinInfo();
       if (!roomId) return;
       if (!/^\d{6}$/.test(roomId)) {
         this.setStatus("\u8BF7\u8F93\u5165 6 \u4F4D\u623F\u95F4\u53F7");
         return;
       }
-      this.enterRoom({ roomId });
+      this.enterRoom({ roomId, password });
+    }
+    async handleCreate() {
+      const config = await requestRoomConfig();
+      if (!config) return;
+      this.enterRoom(Object.assign({ createRoom: true }, config));
     }
     enterRoom(options) {
       this.app.setRoot(new MainView(this.app, this.authSession, options));
@@ -2808,26 +2968,62 @@
       this.invalidatePaint();
     }
   };
-  function requestRoomId() {
+  function requestJoinInfo() {
     if (globalThis.wx && globalThis.wx.showModal) {
       return new Promise((resolve) => {
         globalThis.wx.showModal({
           title: "\u52A0\u5165\u623F\u95F4",
-          placeholderText: "\u8BF7\u8F93\u5165 6 \u4F4D\u623F\u95F4\u53F7",
+          placeholderText: "\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009",
           editable: true,
           success(result) {
-            resolve(result && result.confirm ? String(result.content || "").trim() : "");
+            resolve(result && result.confirm ? parseJoinInfo(result.content) : { roomId: "", password: "" });
           },
           fail() {
-            resolve("");
+            resolve({ roomId: "", password: "" });
           }
         });
       });
     }
     if (globalThis.prompt) {
-      return Promise.resolve(String(globalThis.prompt("\u8BF7\u8F93\u5165 6 \u4F4D\u623F\u95F4\u53F7") || "").trim());
+      return Promise.resolve(parseJoinInfo(globalThis.prompt("\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009") || ""));
     }
-    return Promise.resolve("");
+    return Promise.resolve({ roomId: "", password: "" });
+  }
+  function requestRoomConfig() {
+    if (globalThis.wx && globalThis.wx.showModal) {
+      return new Promise((resolve) => {
+        globalThis.wx.showModal({
+          title: "\u521B\u5EFA\u623F\u95F4",
+          placeholderText: "\u8D85\u65F6\u79D2\u6570,\u5BC6\u7801\u53EF\u9009\uFF0C\u5982 30,1234",
+          editable: true,
+          success(result) {
+            resolve(result && result.confirm ? parseRoomConfig(result.content) : null);
+          },
+          fail() {
+            resolve(null);
+          }
+        });
+      });
+    }
+    if (globalThis.prompt) {
+      return Promise.resolve(parseRoomConfig(globalThis.prompt("\u8D85\u65F6\u79D2\u6570,\u5BC6\u7801\u53EF\u9009\uFF0C\u5982 30,1234") || ""));
+    }
+    return Promise.resolve({ timeoutSeconds: 30, password: "" });
+  }
+  function parseJoinInfo(value) {
+    const parts = String(value || "").split(",").map((item) => item.trim());
+    return {
+      roomId: parts[0] || "",
+      password: parts[1] || ""
+    };
+  }
+  function parseRoomConfig(value) {
+    const parts = String(value || "").split(",").map((item) => item.trim());
+    const timeoutSeconds = Number(parts[0] || 30);
+    return {
+      timeoutSeconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30,
+      password: parts[1] || ""
+    };
   }
 
   // src/index.js

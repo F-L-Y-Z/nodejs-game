@@ -24,6 +24,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function getRemainingSeconds(deadlineAt) {
+  return Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
+}
+
 function getActionItems(state) {
   const actions = [];
   const enabled = state && state.actions ? state.actions : {};
@@ -386,27 +390,29 @@ export default class BoardGraphic extends Graphic {
       const pos = PLAYER_POS[index];
       const active = state.currentPlayer === index && state.phase !== 'round-over';
       const color = active ? '#ffd86b' : '#dce8de';
+      const countdownText = active && state.turnDeadlineAt ? ` ${getRemainingSeconds(state.turnDeadlineAt)}s` : '';
       const readyText =
         state.roomStatus === 'waiting' || state.roomStatus === 'settling'
           ? ` ${player.isReady ? '已准备' : '未准备'}`
           : '';
+      const label = `${player.name}${readyText}${countdownText}`;
       if (pos === 'bottom') {
         drawText(
           ctx,
-          `${player.name}${readyText}`,
+          label,
           x + Math.max(18, metrics.handX - 18),
           y + metrics.handY + metrics.tileH / 2,
           13,
           color,
         );
       } else if (pos === 'top') {
-        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + width / 2, y + metrics.tableTop - 16, 13, color);
+        drawText(ctx, `${label} ${player.handCount}张`, x + width / 2, y + metrics.tableTop - 16, 13, color);
       } else if (pos === 'left') {
         const nameX = metrics.isLandscape ? metrics.tableLeft - 50 : 20;
-        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
+        drawText(ctx, `${label} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       } else if (pos === 'right') {
         const nameX = metrics.isLandscape ? metrics.tableRight + 50 : width - 20;
-        drawText(ctx, `${player.name}${readyText} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
+        drawText(ctx, `${label} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       }
     });
   }

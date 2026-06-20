@@ -101,7 +101,9 @@ Authorization: Bearer <token>
 
 ```json
 {
-  "name": "玩家昵称"
+  "name": "玩家昵称",
+  "password": "1234",
+  "timeoutSeconds": 30
 }
 ```
 
@@ -126,7 +128,8 @@ Authorization: Bearer <token>
 
 ```json
 {
-  "name": "玩家昵称"
+  "name": "玩家昵称",
+  "password": "1234"
 }
 ```
 
@@ -203,7 +206,38 @@ restart
 - 其他玩家只给手牌数量、弃牌、副露。
 - `currentPlayer`、`lastDiscard.from`、`winner` 都转换为当前玩家视角座位。
 
-客户端每 900ms 轮询一次快照。玩家提交动作后立即用动作响应里的快照刷新画面。
+客户端进入牌桌后优先连接 WebSocket：
+
+```txt
+GET /mahjong/ws?token=<token>&roomId=<roomId>&clientId=<clientId>
+```
+
+WebSocket 消息均使用 JSON：
+
+```json
+{
+  "type": "action",
+  "action": "discard",
+  "index": 3
+}
+```
+
+服务端会在房间状态变化后，向每个 WebSocket 连接推送该玩家自己的视角快照。WebSocket 断开时，客户端回退到每 900ms HTTP 轮询。
+
+快照包含倒计时和配置摘要：
+
+```json
+{
+  "serverTime": 1710000000000,
+  "turnDeadlineAt": 1710000030000,
+  "config": {
+    "timeoutSeconds": 30,
+    "hasPassword": true
+  }
+}
+```
+
+客户端在当前操作玩家名称旁显示剩余秒数。超时后，服务端自动执行托管操作：等待碰/杠时自动过，等待出牌时自动打一张牌。
 
 ## 超时和离线
 

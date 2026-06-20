@@ -14,6 +14,8 @@ export default class MainController {
     this.online = false
     this.pollTimer = null
     this.requestingSnapshot = false
+    this.socket = null
+    this.socketOpen = false
 
     if (authSession && authSession.token) {
       this.connect()
@@ -39,6 +41,8 @@ export default class MainController {
         method: 'POST',
         data: {
           name: user.displayName || user.name || 'player',
+          password: this.roomOptions.password || '',
+          timeoutSeconds: this.roomOptions.timeoutSeconds || 30,
         },
       })
       this.online = true
@@ -46,6 +50,7 @@ export default class MainController {
       this.localServer = null
       this.renderResponseState(data)
       this.startPolling()
+      this.connectWebSocket()
     } catch (error) {
       console.warn('[wx-mahjong] multiplayer connect failed', error)
       if (error && error.statusCode === 401 && this.view.backToLogin) {
@@ -98,6 +103,12 @@ export default class MainController {
 
   async sendAction(action, payload = {}) {
     if (!this.roomId) return
+    if (this.socketOpen && this.socket) {
+      console.info('[wx-mahjong] websocket action', { action, roomId: this.roomId, clientId: this.clientId })
+      this.socket.send(JSON.stringify(Object.assign({ type: 'action', action }, payload)))
+      return
+    }
+    console.warn('[wx-mahjong] http action fallback', { action, roomId: this.roomId, clientId: this.clientId })
     try {
       const data = await this.request(this.getActionPath(), {
         method: 'POST',
@@ -121,11 +132,13 @@ export default class MainController {
 
   startPolling() {
     this.stopPolling()
+    console.warn('[wx-mahjong] http polling start', { roomId: this.roomId, clientId: this.clientId })
     this.pollTimer = setInterval(() => this.pollSnapshot(), POLL_INTERVAL_MS)
   }
 
   stopPolling() {
     if (!this.pollTimer) return
+    console.info('[wx-mahjong] http polling stop', { roomId: this.roomId, clientId: this.clientId })
     clearInterval(this.pollTimer)
     this.pollTimer = null
   }
@@ -165,6 +178,76 @@ export default class MainController {
     return data
   }
 
+  connectWebSocket() {
+    if (!this.online || !this.roomId || !this.authSession || !this.authSession.token) return
+    this.closeSocket()
+
+    const url = `${getWsBaseUrl()}/mahjong/ws?token=${encodeURIComponent(this.authSession.token)}&roomId=${encodeURIComponent(this.roomId)}&clientId=${encodeURIComponent(this.clientId)}`
+    console.info('[wx-mahjong] websocket connecting', { url: maskSocketUrl(url), roomId: this.roomId, clientId: this.clientId })
+    const socket = createSocket(url)
+    if (!socket) {
+      console.warn('[wx-mahjong] websocket unavailable, keep http polling')
+      return
+    }
+    this.socket = socket
+
+    socket.onOpen(() => {
+      console.info('[wx-mahjong] websocket open', { roomId: this.roomId, clientId: this.clientId })
+      this.socketOpen = true
+      this.stopPolling()
+    })
+    socket.onMessage((message) => {
+      this.handleSocketMessage(message)
+    })
+    socket.onClose((event) => {
+      console.warn('[wx-mahjong] websocket close', { roomId: this.roomId, clientId: this.clientId, event })
+      this.socketOpen = false
+      this.socket = null
+      if (this.online) this.startPolling()
+    })
+    socket.onError((error) => {
+      console.warn('[wx-mahjong] websocket error', { roomId: this.roomId, clientId: this.clientId, error })
+      this.socketOpen = false
+      this.socket = null
+      if (this.online) this.startPolling()
+    })
+  }
+
+  handleSocketMessage(rawMessage) {
+    let data = null
+    try {
+      data = JSON.parse(typeof rawMessage === 'string' ? rawMessage : rawMessage.data)
+    } catch (error) {
+      console.warn('[wx-mahjong] invalid websocket message', rawMessage)
+      return
+    }
+
+    if (data.type === 'snapshot') {
+      this.renderResponseState(data)
+      return
+    }
+    if (data.type === 'action_result') {
+      this.renderResponseState(data)
+      if (data.ok === false && this.view.showError) {
+        this.view.showError(data.message || '当前不能执行该操作。')
+      }
+      return
+    }
+    if (data.type === 'left') {
+      this.closeSocket()
+      this.stopPolling()
+      this.online = false
+      if (this.view.backToLobby) this.view.backToLobby(data.message || '已退出房间。')
+      return
+    }
+    if (data.type === 'error') {
+      const error = new Error(data.message || 'WebSocket request failed.')
+      error.code = data.code
+      error.statusCode = data.code === 'account_replaced' ? 409 : data.code === 'room_not_found' ? 404 : 400
+      this.handleRequestError(error)
+    }
+  }
+
   renderResponseState(data) {
     if (data && data.roomId) this.roomId = data.roomId
     if (data && data.state) {
@@ -175,6 +258,7 @@ export default class MainController {
 
   startLocal(message = '') {
     this.stopPolling()
+    this.closeSocket()
     this.online = false
     this.localServer = new MahjongServer((state) => {
       if (message) {
@@ -189,6 +273,7 @@ export default class MainController {
     const statusCode = error && error.statusCode
     if (statusCode === 401) {
       this.stopPolling()
+      this.closeSocket()
       this.online = false
       if (this.view.backToLogin) {
         this.view.backToLogin('登录已过期，请重新登录。')
@@ -197,6 +282,7 @@ export default class MainController {
     }
     if (statusCode === 409 && error.code === 'account_replaced') {
       this.stopPolling()
+      this.closeSocket()
       this.online = false
       if (this.view.backToLobby) {
         this.view.backToLobby(error.message || '账号已在其他设备进入该房间。')
@@ -205,6 +291,7 @@ export default class MainController {
     }
     if (statusCode === 404 || statusCode === 410) {
       this.stopPolling()
+      this.closeSocket()
       this.online = false
       if (this.view.backToLobby) {
         this.view.backToLobby(error.message || '房间已失效，请重新创建或加入。')
@@ -216,6 +303,14 @@ export default class MainController {
       return
     }
     this.startLocal('多人连接异常，已切换本地模式。')
+  }
+
+  closeSocket() {
+    if (!this.socket) return
+    const socket = this.socket
+    this.socket = null
+    this.socketOpen = false
+    socket.close()
   }
 
   getJoinPath() {
@@ -235,6 +330,69 @@ function createClientId() {
 function getServerBaseUrl() {
   const value = globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL
   return String(value).replace(/\/+$/, '')
+}
+
+function getWsBaseUrl() {
+  const baseUrl = getServerBaseUrl()
+  if (baseUrl.indexOf('https://') === 0) return `wss://${baseUrl.slice('https://'.length)}`
+  if (baseUrl.indexOf('http://') === 0) return `ws://${baseUrl.slice('http://'.length)}`
+  return baseUrl
+}
+
+function maskSocketUrl(url) {
+  return String(url).replace(/token=([^&]+)/, 'token=***')
+}
+
+function createSocket(url) {
+  if (globalThis.wx && globalThis.wx.connectSocket) {
+    const task = globalThis.wx.connectSocket({ url })
+    return {
+      send(data) {
+        task.send({ data })
+      },
+      close() {
+        task.close()
+      },
+      onOpen(handler) {
+        task.onOpen(handler)
+      },
+      onMessage(handler) {
+        task.onMessage((event) => handler(event.data))
+      },
+      onClose(handler) {
+        task.onClose(handler)
+      },
+      onError(handler) {
+        task.onError(handler)
+      },
+    }
+  }
+
+  if (globalThis.WebSocket) {
+    const socket = new globalThis.WebSocket(url)
+    return {
+      send(data) {
+        socket.send(data)
+      },
+      close() {
+        socket.close()
+      },
+      onOpen(handler) {
+        socket.addEventListener('open', handler)
+      },
+      onMessage(handler) {
+        socket.addEventListener('message', (event) => handler(event.data))
+      },
+      onClose(handler) {
+        socket.addEventListener('close', handler)
+      },
+      onError(handler) {
+        socket.addEventListener('error', handler)
+      },
+    }
+  }
+
+  return null
 }
 
 function createStatusState(message) {

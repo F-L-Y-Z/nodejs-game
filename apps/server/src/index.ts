@@ -12,6 +12,7 @@ import { createServer } from 'node:http';
 import { registerAuthRoutes } from './auth/routes.js';
 import { authRouteLogger, authTokenService, authWechatLogger } from './auth/service.js';
 import { registerMahjongRoutes } from './mahjong/routes.js';
+import { registerMahjongWebSocket } from './mahjong/web-socket.js';
 import { GameRoom } from './rooms/game-room.js';
 
 const port = readNumberEnv('PORT', 2567);
@@ -32,11 +33,20 @@ registerAuthRoutes(app, authTokenService, {
 registerMahjongRoutes(app);
 
 const httpServer = createServer(app);
+registerMahjongWebSocket(httpServer);
+
+const colyseusTransport = new WebSocketTransport({
+  noServer: true,
+});
+colyseusTransport.attachToServer(httpServer, {
+  filter: (request) => {
+    const url = new URL(request.url || '/', 'http://localhost');
+    return url.pathname === '/colyseus-ws';
+  },
+});
 
 const gameServer = new Server({
-  transport: new WebSocketTransport({
-    server: httpServer,
-  }),
+  transport: colyseusTransport,
 });
 
 gameServer.define(ROOM_NAMES.Game, GameRoom);
