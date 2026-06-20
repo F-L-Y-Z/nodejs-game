@@ -34,7 +34,7 @@
 ## P1 联机体验核心
 
 - [x] 使用 WebSocket 通信
-  - [x] 客户端通过 `colyseus.js` 连接 Colyseus `mahjong_room`
+  - [x] 客户端通过 `@colyseus/sdk` 连接 Colyseus `mahjong_room`
   - [x] 通过 `mahjong_action` 提交动作
   - [x] 通过 `mahjong_snapshot` 接收各玩家视角快照
   - [x] 客户端已移除 HTTP 轮询兜底
@@ -52,8 +52,8 @@
   - [x] 使用 `onAuth` 校验 token
   - [x] 使用 `onJoin`/`onLeave` 管理座位恢复、替换登录和退出
   - [x] 通过 `mahjong_action`/`mahjong_snapshot` 通信
-- [x] 客户端接入 `colyseus.js`
-  - [x] `apps/wx-mahjong` 已声明 `colyseus.js`
+- [x] 客户端接入 `@colyseus/sdk`
+  - [x] `apps/wx-mahjong` 已声明 `@colyseus/sdk`
   - [x] 客户端用 Colyseus SDK 替换自定义 `/mahjong/ws`
   - [x] 客户端删除 HTTP 轮询兜底
 - [x] 服务端删除迁移期兼容层

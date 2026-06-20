@@ -10,7 +10,7 @@
     "clean": "rm -f public/game-src.js"
   },
   "dependencies": {
-    "colyseus.js": "^0.16.22",
+    "@colyseus/sdk": "^0.17.26",
     "@repo/mc2d": "workspace:*"
   },
   "devDependencies": {

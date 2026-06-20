@@ -31,10 +31,10 @@ packages/
 
 ## 客户端 SDK 依赖
 
-`colyseus.js` 安装在微信小游戏客户端包：
+`@colyseus/sdk` 安装在微信小游戏客户端包：
 
 ```bash
-pnpm --filter @repo/wx-mahjong add colyseus.js@^0.17
+pnpm --filter @repo/wx-mahjong add @colyseus/sdk@^0.17.26
 ```
 
 当前客户端直接在 `main-controller.js` 中使用 Colyseus SDK。后续如果连接逻辑继续增长，再拆到独立封装：

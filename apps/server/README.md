@@ -95,7 +95,7 @@ npm run typecheck  # 类型检查
 ## 客户端连接示例
 
 ```ts
-import { Client } from "colyseus.js";
+import { Client } from "@colyseus/sdk";
 
 const client = new Client("ws://localhost:2567");
 const room = await client.joinOrCreate("game_room", {

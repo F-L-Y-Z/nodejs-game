@@ -1,4 +1,4 @@
-import { Client } from 'colyseus.js'
+import { Client } from '@colyseus/sdk'
 import { SERVER_BASE_URL } from './config.js'
 
 const ROOM_NAME = 'mahjong_room'
@@ -205,7 +205,7 @@ export default class MainController {
   }
 
   createColyseusClient() {
-    return new Client(getColyseusEndpoint())
+    return new Client(getServerBaseUrl())
   }
 
   handleMissingAuth() {
@@ -226,15 +226,6 @@ function createClientId() {
 function getServerBaseUrl() {
   const value = globalThis.__WX_MAHJONG_SERVER_URL__ || SERVER_BASE_URL
   return String(value).replace(/\/+$/, '')
-}
-
-function getColyseusEndpoint() {
-  const baseUrl = getServerBaseUrl()
-  return baseUrl.indexOf('https://') === 0
-    ? `wss://${baseUrl.slice('https://'.length)}`
-    : baseUrl.indexOf('http://') === 0
-      ? `ws://${baseUrl.slice('http://'.length)}`
-      : baseUrl
 }
 
 function mapColyseusErrorStatus(code) {
