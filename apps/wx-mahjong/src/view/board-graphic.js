@@ -350,6 +350,9 @@ export default class BoardGraphic extends Graphic {
   drawHeader(ctx, state, x, y, width, metrics, spriteAsset) {
     const titleY = metrics.isLandscape ? 20 : 22;
     drawText(ctx, '红中麻将', x + 18, y + titleY, 18, '#f9f2dc', 'left');
+    if (state.roomId) {
+      drawText(ctx, `房间 ${state.roomId}`, x + width / 2, y + titleY, 13, '#dce8de');
+    }
     drawText(ctx, `牌墙 ${state.wallCount}`, x + width - 18, y + titleY, 14, '#dce8de', 'right');
     if (state.bird) {
       const birdY = metrics.isLandscape ? 34 : 58;

@@ -4,9 +4,11 @@ import MahjongServer from './server/mahjong-server.js'
 const POLL_INTERVAL_MS = 900
 
 export default class MainController {
-  constructor(view, authSession = null) {
+  constructor(view, authSession = null, roomOptions = {}) {
     this.view = view
     this.authSession = authSession
+    this.roomOptions = roomOptions
+    this.roomId = roomOptions.roomId || ''
     this.localServer = null
     this.online = false
     this.pollTimer = null
@@ -32,13 +34,14 @@ export default class MainController {
 
     try {
       const user = (this.authSession && this.authSession.user) || {}
-      const data = await this.request('/mahjong/join', {
+      const data = await this.request(this.getJoinPath(), {
         method: 'POST',
         data: {
           name: user.displayName || user.name || 'player',
         },
       })
       this.online = true
+      this.roomId = data.roomId || this.roomId
       this.localServer = null
       this.renderResponseState(data)
       this.startPolling()
@@ -79,8 +82,9 @@ export default class MainController {
   }
 
   async sendAction(action, payload = {}) {
+    if (!this.roomId) return
     try {
-      const data = await this.request('/mahjong/action', {
+      const data = await this.request(this.getActionPath(), {
         method: 'POST',
         data: Object.assign({ action }, payload),
       })
@@ -103,10 +107,10 @@ export default class MainController {
   }
 
   async pollSnapshot() {
-    if (!this.online || this.requestingSnapshot) return
+    if (!this.online || this.requestingSnapshot || !this.roomId) return
     this.requestingSnapshot = true
     try {
-      const data = await this.request('/mahjong/snapshot', { method: 'GET' })
+      const data = await this.request(`/mahjong/rooms/${this.roomId}/snapshot`, { method: 'GET' })
       this.renderResponseState(data)
     } catch (error) {
       console.warn('[wx-mahjong] snapshot poll failed', error)
@@ -127,14 +131,18 @@ export default class MainController {
       data: options.data || {},
     })
     const data = response && response.data
-    if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data || !data.ok) {
+    if (!response || response.statusCode < 200 || response.statusCode >= 300 || !data) {
       throw new Error((data && data.message) || 'Mahjong request failed.')
     }
     return data
   }
 
   renderResponseState(data) {
-    if (data && data.state) this.view.renderState(data.state)
+    if (data && data.roomId) this.roomId = data.roomId
+    if (data && data.state) {
+      data.state.roomId = this.roomId
+      this.view.renderState(data.state)
+    }
   }
 
   startLocal(message = '') {
@@ -147,6 +155,15 @@ export default class MainController {
       }
       this.view.renderState(state)
     })
+  }
+
+  getJoinPath() {
+    if (this.roomId) return `/mahjong/rooms/${this.roomId}/join`
+    return '/mahjong/rooms'
+  }
+
+  getActionPath() {
+    return `/mahjong/rooms/${this.roomId}/action`
   }
 }
 

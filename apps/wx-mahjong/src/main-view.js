@@ -3,7 +3,7 @@ import MainController from './main-controller.js';
 import BoardGraphic, { getActionLayout, getHandHitRects } from './view/board-graphic.js';
 
 export default class MainView extends Container {
-  constructor(app, authSession = null) {
+  constructor(app, authSession = null, roomOptions = {}) {
     super();
 
     this.app = app;
@@ -14,7 +14,7 @@ export default class MainView extends Container {
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
     this.board = this.addChild(new BoardGraphic(app.assets));
     this.board.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
-    this.controller = new MainController(this, authSession);
+    this.controller = new MainController(this, authSession, roomOptions);
   }
 
   renderState(state) {
