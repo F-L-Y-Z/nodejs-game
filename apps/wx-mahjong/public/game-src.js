@@ -9875,464 +9875,6 @@ Check @type() annotation`);
 
   // src/main-controller.js
   var import_colyseus = __toESM(require_cjs(), 1);
-
-  // src/server/tiles.js
-  var SUITS = [
-    { key: "W", name: "\u4E07", color: "#c0392b" },
-    { key: "B", name: "\u7B52", color: "#1f7a4d" },
-    { key: "T", name: "\u6761", color: "#2563a8" }
-  ];
-  var ZHONG = "ZH";
-  function createTileTypes() {
-    const types = [];
-    SUITS.forEach((suit) => {
-      for (let rank = 1; rank <= 9; rank++) {
-        types.push(`${suit.key}${rank}`);
-      }
-    });
-    types.push(ZHONG);
-    return types;
-  }
-  var TILE_TYPES = createTileTypes();
-  function createDeck() {
-    const deck = [];
-    TILE_TYPES.forEach((tile) => {
-      for (let i = 0; i < 4; i++) deck.push(tile);
-    });
-    return deck;
-  }
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const t = arr[i];
-      arr[i] = arr[j];
-      arr[j] = t;
-    }
-    return arr;
-  }
-  function tileSuit(tile) {
-    if (tile === ZHONG) return null;
-    return tile[0];
-  }
-  function tileRank(tile) {
-    if (tile === ZHONG) return 0;
-    return parseInt(tile.slice(1), 10);
-  }
-  function tileInfo(tile) {
-    if (tile === ZHONG) {
-      return { label: "\u4E2D", subLabel: "\u7EA2", color: "#d71920", suit: null, rank: 0 };
-    }
-    const suit = SUITS.find((item) => item.key === tileSuit(tile));
-    const rank = tileRank(tile);
-    return {
-      label: `${rank}`,
-      subLabel: suit.name,
-      color: suit.color,
-      suit: suit.key,
-      rank
-    };
-  }
-  function tileOrder(tile) {
-    if (tile === ZHONG) return 99;
-    const suitIndex = SUITS.findIndex((suit) => suit.key === tileSuit(tile));
-    return suitIndex * 10 + tileRank(tile);
-  }
-  function sortTiles(tiles) {
-    return tiles.slice().sort((a, b) => tileOrder(a) - tileOrder(b));
-  }
-  function countTiles(tiles) {
-    return tiles.reduce((map, tile) => {
-      map[tile] = (map[tile] || 0) + 1;
-      return map;
-    }, {});
-  }
-  function removeTiles(hand, tile, count) {
-    let removed = 0;
-    for (let i = hand.length - 1; i >= 0 && removed < count; i--) {
-      if (hand[i] === tile) {
-        hand.splice(i, 1);
-        removed++;
-      }
-    }
-    return removed === count;
-  }
-
-  // src/server/hu.js
-  var NORMAL_TYPES = TILE_TYPES.filter((tile) => tile !== ZHONG);
-  function cloneCounts(counts) {
-    return Object.assign({}, counts);
-  }
-  function countTotal(counts) {
-    return NORMAL_TYPES.reduce((sum, tile) => sum + (counts[tile] || 0), 0);
-  }
-  function firstTile(counts) {
-    return NORMAL_TYPES.find((tile) => (counts[tile] || 0) > 0);
-  }
-  function keyOf(counts, wildcards, groupsLeft) {
-    const body = NORMAL_TYPES.map((tile) => counts[tile] || 0).join("");
-    return `${body}|${wildcards}|${groupsLeft}`;
-  }
-  function consume(counts, tile, amount) {
-    const available = counts[tile] || 0;
-    const used = Math.min(available, amount);
-    counts[tile] = available - used;
-    return amount - used;
-  }
-  function canMakeGroups(counts, wildcards, groupsLeft, memo) {
-    if (groupsLeft === 0) return countTotal(counts) === 0;
-    const memoKey = keyOf(counts, wildcards, groupsLeft);
-    if (memo[memoKey] !== void 0) return memo[memoKey];
-    const tile = firstTile(counts);
-    if (!tile) return memo[memoKey] = wildcards >= groupsLeft * 3;
-    let next = cloneCounts(counts);
-    let need = consume(next, tile, 3);
-    if (need <= wildcards && canMakeGroups(next, wildcards - need, groupsLeft - 1, memo)) {
-      return memo[memoKey] = true;
-    }
-    const suit = tileSuit(tile);
-    const rank = tileRank(tile);
-    if (rank <= 7) {
-      const seq = [`${suit}${rank}`, `${suit}${rank + 1}`, `${suit}${rank + 2}`];
-      next = cloneCounts(counts);
-      need = 0;
-      seq.forEach((item) => {
-        need += consume(next, item, 1);
-      });
-      if (need <= wildcards && canMakeGroups(next, wildcards - need, groupsLeft - 1, memo)) {
-        return memo[memoKey] = true;
-      }
-    }
-    return memo[memoKey] = false;
-  }
-  function canHuWithMelds(hand, meldCount = 0) {
-    const groupsLeft = 4 - meldCount;
-    if (groupsLeft < 0) return false;
-    if (hand.length !== groupsLeft * 3 + 2) return false;
-    const counts = countTiles(hand);
-    const wildcards = counts[ZHONG] || 0;
-    delete counts[ZHONG];
-    for (const pairTile of NORMAL_TYPES) {
-      const pairCounts = cloneCounts(counts);
-      const need = consume(pairCounts, pairTile, 2);
-      if (need <= wildcards && canMakeGroups(pairCounts, wildcards - need, groupsLeft, {})) {
-        return true;
-      }
-    }
-    if (wildcards >= 2 && canMakeGroups(cloneCounts(counts), wildcards - 2, groupsLeft, {})) {
-      return true;
-    }
-    return false;
-  }
-
-  // src/server/mahjong-server.js
-  var PLAYER_NAMES = ["\u4F60", "\u4E0B\u5BB6", "\u5BF9\u5BB6", "\u4E0A\u5BB6"];
-  function nextPlayer(player) {
-    return (player + 1) % 4;
-  }
-  function clonePlayer(player, index) {
-    const hand = player.drawnTile ? player.hand.concat(player.drawnTile) : player.hand.slice();
-    return {
-      index,
-      name: PLAYER_NAMES[index],
-      hand,
-      drawnTile: player.drawnTile,
-      handCount: hand.length,
-      discards: player.discards.slice(),
-      melds: player.melds.map((meld) => Object.assign({}, meld, { tiles: meld.tiles.slice() }))
-    };
-  }
-  var MahjongServer = class {
-    constructor(onUpdate) {
-      this.onUpdate = onUpdate;
-      this.autoDelay = 650;
-      this.autoTimer = null;
-      this.start();
-    }
-    start() {
-      this.clearAutoTimer();
-      this.wall = shuffle(createDeck());
-      this.players = PLAYER_NAMES.map(() => ({ hand: [], drawnTile: null, discards: [], melds: [] }));
-      this.currentPlayer = 0;
-      this.phase = "waiting-discard";
-      this.lastDiscard = null;
-      this.pendingActions = [];
-      this.winner = null;
-      this.bird = null;
-      this.message = "\u8F6E\u5230\u4F60\u51FA\u724C\u3002\u7EA2\u4E2D\u53EF\u4F5C\u4E07\u80FD\u724C\uFF0C\u4E0D\u80FD\u6253\u51FA\u3002";
-      for (let i = 0; i < 13; i++) {
-        this.players.forEach((player) => player.hand.push(this.wall.pop()));
-      }
-      this.players[0].drawnTile = this.wall.pop();
-      this.sortHands();
-      this.emit();
-    }
-    sortHands() {
-      this.players.forEach((player) => {
-        player.hand = sortTiles(player.hand);
-      });
-    }
-    emit() {
-      if (this.onUpdate) this.onUpdate(this.snapshot());
-    }
-    snapshot() {
-      return {
-        phase: this.phase,
-        currentPlayer: this.currentPlayer,
-        wallCount: this.wall.length,
-        lastDiscard: this.lastDiscard && Object.assign({}, this.lastDiscard),
-        message: this.message,
-        winner: this.winner,
-        bird: this.bird,
-        actions: this.getPlayerActions(),
-        players: this.players.map(clonePlayer)
-      };
-    }
-    getPlayerActions() {
-      if (this.phase === "round-over") return {};
-      if (this.phase === "waiting-action") {
-        const action = this.pendingActions.find((item) => item.player === 0);
-        return action ? { pass: true, peng: action.peng, gang: action.gang } : {};
-      }
-      if (this.currentPlayer !== 0 || this.phase !== "waiting-discard") return {};
-      return {
-        discard: true,
-        hu: this.canCurrentHu(0),
-        gangTiles: this.getConcealedGangTiles(0)
-      };
-    }
-    playerDiscard(tileIndex) {
-      if (this.phase !== "waiting-discard" || this.currentPlayer !== 0) return;
-      if (this.discardTile(0, tileIndex)) this.scheduleAuto();
-      this.emit();
-    }
-    playerPass() {
-      if (this.phase !== "waiting-action") return;
-      this.pendingActions = this.pendingActions.filter((action) => action.player !== 0);
-      this.message = "\u4F60\u9009\u62E9\u8FC7\u3002";
-      this.resolvePendingActions();
-      this.scheduleAuto();
-      this.emit();
-    }
-    playerPeng() {
-      this.claimDiscard(0, "peng");
-      this.emit();
-    }
-    playerGang(tile = null) {
-      if (this.phase === "waiting-action") {
-        this.claimDiscard(0, "gang");
-      } else if (this.currentPlayer === 0 && this.phase === "waiting-discard") {
-        const gangTile = tile || this.getConcealedGangTiles(0)[0];
-        if (gangTile) this.concealedGang(0, gangTile);
-      }
-      this.emit();
-    }
-    playerHu() {
-      if (this.currentPlayer !== 0 || this.phase !== "waiting-discard") return;
-      if (!this.canCurrentHu(0)) return;
-      this.finishRound(0, "\u4F60\u81EA\u6478\u80E1\u724C");
-      this.emit();
-    }
-    discardTile(playerIndex, tileIndex) {
-      const player = this.players[playerIndex];
-      const handTiles = this.getPlayerTiles(playerIndex);
-      const tile = handTiles[tileIndex];
-      if (!tile || tile === ZHONG) {
-        this.message = "\u7EA2\u4E2D\u4E0D\u80FD\u6253\u51FA\u3002";
-        return false;
-      }
-      if (player.drawnTile && tileIndex === player.hand.length) {
-        player.drawnTile = null;
-      } else {
-        player.hand.splice(tileIndex, 1);
-        this.commitDrawnTile(playerIndex);
-      }
-      player.hand = sortTiles(player.hand);
-      player.discards.push(tile);
-      this.lastDiscard = { tile, from: playerIndex };
-      this.message = `${PLAYER_NAMES[playerIndex]}\u6253\u51FA${this.tileText(tile)}\u3002`;
-      this.collectPendingActions();
-      if (this.phase !== "waiting-action") this.nextTurn(nextPlayer(playerIndex));
-      return true;
-    }
-    collectPendingActions() {
-      const { tile, from } = this.lastDiscard;
-      const actions = [];
-      for (let offset = 1; offset <= 3; offset++) {
-        const playerIndex = (from + offset) % 4;
-        const count = countTiles(this.players[playerIndex].hand)[tile] || 0;
-        if (tile !== ZHONG && count >= 2) {
-          actions.push({ player: playerIndex, peng: true, gang: count >= 3 });
-        }
-      }
-      this.pendingActions = actions;
-      this.phase = actions.length ? "waiting-action" : "waiting-discard";
-      if (actions.find((action) => action.player === 0)) {
-        this.message = `\u6709\u4EBA\u6253\u51FA${this.tileText(tile)}\uFF0C\u4F60\u53EF\u4EE5\u78B0/\u6760\u3002`;
-      }
-    }
-    resolvePendingActions() {
-      if (!this.pendingActions.length) {
-        this.nextTurn(nextPlayer(this.lastDiscard.from));
-        return;
-      }
-      const aiAction = this.pendingActions.find((action) => action.player !== 0);
-      if (!aiAction) return;
-      this.claimDiscard(aiAction.player, aiAction.gang ? "gang" : "peng");
-    }
-    claimDiscard(playerIndex, type) {
-      if (!this.lastDiscard) return;
-      const action = this.pendingActions.find((item) => item.player === playerIndex);
-      if (!action || type === "gang" && !action.gang || type === "peng" && !action.peng) return;
-      const player = this.players[playerIndex];
-      const need = type === "gang" ? 3 : 2;
-      const tile = this.lastDiscard.tile;
-      if (!removeTiles(player.hand, tile, need)) return;
-      const from = this.lastDiscard.from;
-      const discardPile = this.players[from].discards;
-      discardPile.splice(discardPile.lastIndexOf(tile), 1);
-      player.melds.push({ type, tiles: new Array(need + 1).fill(tile), from });
-      this.currentPlayer = playerIndex;
-      this.phase = "waiting-discard";
-      this.pendingActions = [];
-      this.lastDiscard = null;
-      if (type === "gang") this.drawTile(playerIndex);
-      this.sortHands();
-      this.message = `${PLAYER_NAMES[playerIndex]}${type === "gang" ? "\u6760" : "\u78B0"}\u724C\u3002`;
-    }
-    concealedGang(playerIndex, tile) {
-      const player = this.players[playerIndex];
-      if ((countTiles(this.getPlayerTiles(playerIndex))[tile] || 0) < 4 || tile === ZHONG) return;
-      this.commitDrawnTile(playerIndex);
-      removeTiles(player.hand, tile, 4);
-      player.melds.push({ type: "angang", tiles: [tile, tile, tile, tile], from: playerIndex });
-      this.drawTile(playerIndex);
-      this.sortHands();
-      this.message = `${PLAYER_NAMES[playerIndex]}\u6697\u6760\u3002`;
-    }
-    nextTurn(playerIndex) {
-      this.currentPlayer = playerIndex;
-      this.phase = "waiting-discard";
-      if (!this.drawTile(playerIndex)) return;
-      if (this.canCurrentHu(playerIndex)) {
-        if (playerIndex === 0) {
-          this.message = "\u4F60\u53EF\u4EE5\u81EA\u6478\u80E1\u724C\u3002";
-        } else {
-          this.finishRound(playerIndex, `${PLAYER_NAMES[playerIndex]}\u81EA\u6478\u80E1\u724C`);
-        }
-      } else {
-        this.message = playerIndex === 0 ? "\u8F6E\u5230\u4F60\u6478\u724C\u540E\u51FA\u724C\u3002" : `${PLAYER_NAMES[playerIndex]}\u6478\u724C\u3002`;
-      }
-    }
-    drawTile(playerIndex) {
-      if (!this.wall.length) {
-        this.phase = "round-over";
-        this.message = "\u724C\u5899\u6478\u5B8C\uFF0C\u6D41\u5C40\u3002";
-        return false;
-      }
-      this.players[playerIndex].drawnTile = this.wall.pop();
-      return true;
-    }
-    clearAutoTimer() {
-      if (!this.autoTimer) return;
-      clearTimeout(this.autoTimer);
-      this.autoTimer = null;
-    }
-    scheduleAuto() {
-      this.clearAutoTimer();
-      if (this.phase === "round-over") return;
-      if (this.currentPlayer === 0 && this.phase !== "waiting-action") return;
-      if (this.pendingActions.find((action) => action.player === 0)) return;
-      this.autoTimer = setTimeout(() => {
-        this.autoTimer = null;
-        this.runAutoStep();
-      }, this.autoDelay);
-    }
-    runAutoStep() {
-      if (this.phase === "round-over") return;
-      if (this.phase === "waiting-action") {
-        if (this.pendingActions.find((action) => action.player === 0)) return;
-        this.resolvePendingActions();
-        this.emit();
-        this.scheduleAuto();
-        return;
-      }
-      if (this.currentPlayer === 0) return;
-      const playerIndex = this.currentPlayer;
-      if (this.canCurrentHu(playerIndex)) {
-        this.finishRound(playerIndex, `${PLAYER_NAMES[playerIndex]}\u81EA\u6478\u80E1\u724C`);
-        this.emit();
-        return;
-      }
-      const gangTile = this.getConcealedGangTiles(playerIndex)[0];
-      if (gangTile) {
-        this.concealedGang(playerIndex, gangTile);
-        this.emit();
-        this.scheduleAuto();
-        return;
-      }
-      const discardIndex = this.chooseAIDiscard(playerIndex);
-      this.discardTile(playerIndex, discardIndex);
-      this.emit();
-      this.scheduleAuto();
-    }
-    chooseAIDiscard(playerIndex) {
-      const hand = this.getPlayerTiles(playerIndex);
-      const counts = countTiles(hand);
-      let bestIndex = hand.findIndex((tile) => tile !== ZHONG);
-      let bestScore = -Infinity;
-      hand.forEach((tile, index) => {
-        if (tile === ZHONG) return;
-        const score = this.discardScore(tile, counts);
-        if (score > bestScore) {
-          bestIndex = index;
-          bestScore = score;
-        }
-      });
-      return bestIndex;
-    }
-    discardScore(tile, counts) {
-      const order = tileOrder(tile);
-      let score = order / 100;
-      if (counts[tile] > 1) score -= 4;
-      const suit = tile[0];
-      const rank = parseInt(tile.slice(1), 10);
-      if (counts[`${suit}${rank - 1}`]) score -= 1;
-      if (counts[`${suit}${rank + 1}`]) score -= 1;
-      if (counts[`${suit}${rank - 2}`]) score -= 0.4;
-      if (counts[`${suit}${rank + 2}`]) score -= 0.4;
-      return score;
-    }
-    getConcealedGangTiles(playerIndex) {
-      const counts = countTiles(this.getPlayerTiles(playerIndex));
-      return Object.keys(counts).filter((tile) => tile !== ZHONG && counts[tile] >= 4);
-    }
-    canCurrentHu(playerIndex) {
-      const player = this.players[playerIndex];
-      return canHuWithMelds(this.getPlayerTiles(playerIndex), player.melds.length);
-    }
-    getPlayerTiles(playerIndex) {
-      const player = this.players[playerIndex];
-      return player.drawnTile ? player.hand.concat(player.drawnTile) : player.hand.slice();
-    }
-    commitDrawnTile(playerIndex) {
-      const player = this.players[playerIndex];
-      if (!player.drawnTile) return;
-      player.hand.push(player.drawnTile);
-      player.drawnTile = null;
-    }
-    finishRound(winner, reason) {
-      this.phase = "round-over";
-      this.winner = winner;
-      this.bird = this.wall.pop() || null;
-      this.message = `${reason}\u3002${this.bird ? `\u624E\u9E1F\uFF1A${this.tileText(this.bird)}\u3002` : ""}`;
-    }
-    tileText(tile) {
-      if (tile === ZHONG) return "\u7EA2\u4E2D";
-      return `${tile.slice(1)}${tile[0] === "W" ? "\u4E07" : tile[0] === "B" ? "\u7B52" : "\u6761"}`;
-    }
-  };
-
-  // src/main-controller.js
   var ROOM_NAME = "mahjong_room";
   var CLIENT_MESSAGES = {
     MahjongAction: "mahjong_action"
@@ -10349,13 +9891,12 @@ Check @type() annotation`);
       this.roomId = roomOptions.roomId || "";
       this.clientId = createClientId();
       this.client = null;
-      this.localServer = null;
       this.online = false;
       this.room = null;
       if (authSession && authSession.token) {
         this.connect();
       } else {
-        this.startLocal("\u672A\u767B\u5F55\uFF0C\u4F7F\u7528\u672C\u5730\u5355\u673A\u6A21\u5F0F\u3002");
+        this.handleMissingAuth();
       }
     }
     setAuthSession(authSession) {
@@ -10381,7 +9922,6 @@ Check @type() annotation`);
         this.room = room;
         this.online = true;
         this.roomId = room.roomId || room.id || this.roomId;
-        this.localServer = null;
         this.bindRoom(room);
       } catch (error) {
         console.warn("[wx-mahjong] multiplayer connect failed", error);
@@ -10390,39 +9930,44 @@ Check @type() annotation`);
         } else if (error && (error.statusCode === 404 || error.statusCode === 409 || error.statusCode === 410) && this.view.backToLobby) {
           this.view.backToLobby(error.message || "\u623F\u95F4\u4E0D\u53EF\u7528\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
         } else {
-          this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5931\u8D25\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+          this.closeRoom();
+          this.online = false;
+          if (this.view.backToLobby) this.view.backToLobby(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+          else if (this.view.showError) this.view.showError(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
         }
       }
     }
     restart() {
       if (this.online) this.sendAction("restart");
-      else this.startLocal();
+      else this.showDisconnectedError();
     }
     ready() {
       if (this.online) this.sendAction("ready");
+      else this.showDisconnectedError();
     }
     leave() {
       if (this.online) this.sendAction("leave");
+      else this.showDisconnectedError();
     }
     discard(index) {
       if (this.online) this.sendAction("discard", { index });
-      else if (this.localServer) this.localServer.playerDiscard(index);
+      else this.showDisconnectedError();
     }
     pass() {
       if (this.online) this.sendAction("pass");
-      else if (this.localServer) this.localServer.playerPass();
+      else this.showDisconnectedError();
     }
     peng() {
       if (this.online) this.sendAction("peng");
-      else if (this.localServer) this.localServer.playerPeng();
+      else this.showDisconnectedError();
     }
     gang(tile = null) {
       if (this.online) this.sendAction("gang", tile ? { tile } : {});
-      else if (this.localServer) this.localServer.playerGang(tile);
+      else this.showDisconnectedError();
     }
     hu() {
       if (this.online) this.sendAction("hu");
-      else if (this.localServer) this.localServer.playerHu();
+      else this.showDisconnectedError();
     }
     async sendAction(action, payload = {}) {
       if (!this.roomId) return;
@@ -10471,17 +10016,6 @@ Check @type() annotation`);
         this.view.renderState(data.state);
       }
     }
-    startLocal(message = "") {
-      this.closeRoom();
-      this.online = false;
-      this.localServer = new MahjongServer((state) => {
-        if (message) {
-          state.message = message;
-          message = "";
-        }
-        this.view.renderState(state);
-      });
-    }
     handleRequestError(error) {
       const statusCode = error && error.statusCode;
       if (statusCode === 401) {
@@ -10512,7 +10046,9 @@ Check @type() annotation`);
         this.view.showError(error.message || "\u64CD\u4F5C\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
         return;
       }
-      this.startLocal("\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u5DF2\u5207\u6362\u672C\u5730\u6A21\u5F0F\u3002");
+      if (this.view.backToLobby) {
+        this.view.backToLobby(error.message || "\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+      }
     }
     closeRoom() {
       if (!this.room) return;
@@ -10522,6 +10058,14 @@ Check @type() annotation`);
     }
     createColyseusClient() {
       return new import_colyseus.Client(getColyseusEndpoint());
+    }
+    handleMissingAuth() {
+      this.online = false;
+      this.view.renderState(createStatusState("\u8BF7\u5148\u767B\u5F55\u540E\u8FDB\u5165\u623F\u95F4\u3002"));
+      if (this.view.backToLogin) this.view.backToLogin("\u8BF7\u5148\u767B\u5F55\u540E\u8FDB\u5165\u623F\u95F4\u3002");
+    }
+    showDisconnectedError() {
+      if (this.view.showError) this.view.showError("\u672A\u8FDE\u63A5\u5230\u591A\u4EBA\u623F\u95F4\u3002");
     }
   };
   function createClientId() {
@@ -10562,6 +10106,36 @@ Check @type() annotation`);
         discards: [],
         melds: []
       }))
+    };
+  }
+
+  // src/mahjong/tiles.js
+  var SUITS = [
+    { key: "W", name: "\u4E07", color: "#c0392b" },
+    { key: "B", name: "\u7B52", color: "#1f7a4d" },
+    { key: "T", name: "\u6761", color: "#2563a8" }
+  ];
+  var ZHONG = "ZH";
+  function tileSuit(tile) {
+    if (tile === ZHONG) return null;
+    return tile[0];
+  }
+  function tileRank(tile) {
+    if (tile === ZHONG) return 0;
+    return parseInt(tile.slice(1), 10);
+  }
+  function tileInfo(tile) {
+    if (tile === ZHONG) {
+      return { label: "\u4E2D", subLabel: "\u7EA2", color: "#d71920", suit: null, rank: 0 };
+    }
+    const suit = SUITS.find((item) => item.key === tileSuit(tile)) || SUITS[0];
+    const rank = tileRank(tile);
+    return {
+      label: `${rank}`,
+      subLabel: suit.name,
+      color: suit.color,
+      suit: suit.key,
+      rank
     };
   }
 

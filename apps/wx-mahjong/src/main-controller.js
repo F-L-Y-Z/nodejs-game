@@ -1,6 +1,5 @@
 import { Client } from 'colyseus.js'
 import { SERVER_BASE_URL } from './config.js'
-import MahjongServer from './server/mahjong-server.js'
 
 const ROOM_NAME = 'mahjong_room'
 const CLIENT_MESSAGES = {
@@ -19,14 +18,13 @@ export default class MainController {
     this.roomId = roomOptions.roomId || ''
     this.clientId = createClientId()
     this.client = null
-    this.localServer = null
     this.online = false
     this.room = null
 
     if (authSession && authSession.token) {
       this.connect()
     } else {
-      this.startLocal('未登录，使用本地单机模式。')
+      this.handleMissingAuth()
     }
   }
 
@@ -58,7 +56,6 @@ export default class MainController {
       this.room = room
       this.online = true
       this.roomId = room.roomId || room.id || this.roomId
-      this.localServer = null
       this.bindRoom(room)
     } catch (error) {
       console.warn('[wx-mahjong] multiplayer connect failed', error)
@@ -67,47 +64,52 @@ export default class MainController {
       } else if (error && (error.statusCode === 404 || error.statusCode === 409 || error.statusCode === 410) && this.view.backToLobby) {
         this.view.backToLobby(error.message || '房间不可用，请重新创建或加入。')
       } else {
-        this.startLocal('多人连接失败，已切换本地模式。')
+        this.closeRoom()
+        this.online = false
+        if (this.view.backToLobby) this.view.backToLobby(error.message || '连接房间失败，请稍后重试。')
+        else if (this.view.showError) this.view.showError(error.message || '连接房间失败，请稍后重试。')
       }
     }
   }
 
   restart() {
     if (this.online) this.sendAction('restart')
-    else this.startLocal()
+    else this.showDisconnectedError()
   }
 
   ready() {
     if (this.online) this.sendAction('ready')
+    else this.showDisconnectedError()
   }
 
   leave() {
     if (this.online) this.sendAction('leave')
+    else this.showDisconnectedError()
   }
 
   discard(index) {
     if (this.online) this.sendAction('discard', { index })
-    else if (this.localServer) this.localServer.playerDiscard(index)
+    else this.showDisconnectedError()
   }
 
   pass() {
     if (this.online) this.sendAction('pass')
-    else if (this.localServer) this.localServer.playerPass()
+    else this.showDisconnectedError()
   }
 
   peng() {
     if (this.online) this.sendAction('peng')
-    else if (this.localServer) this.localServer.playerPeng()
+    else this.showDisconnectedError()
   }
 
   gang(tile = null) {
     if (this.online) this.sendAction('gang', tile ? { tile } : {})
-    else if (this.localServer) this.localServer.playerGang(tile)
+    else this.showDisconnectedError()
   }
 
   hu() {
     if (this.online) this.sendAction('hu')
-    else if (this.localServer) this.localServer.playerHu()
+    else this.showDisconnectedError()
   }
 
   async sendAction(action, payload = {}) {
@@ -160,18 +162,6 @@ export default class MainController {
     }
   }
 
-  startLocal(message = '') {
-    this.closeRoom()
-    this.online = false
-    this.localServer = new MahjongServer((state) => {
-      if (message) {
-        state.message = message
-        message = ''
-      }
-      this.view.renderState(state)
-    })
-  }
-
   handleRequestError(error) {
     const statusCode = error && error.statusCode
     if (statusCode === 401) {
@@ -202,7 +192,9 @@ export default class MainController {
       this.view.showError(error.message || '操作失败，请稍后重试。')
       return
     }
-    this.startLocal('多人连接异常，已切换本地模式。')
+    if (this.view.backToLobby) {
+      this.view.backToLobby(error.message || '多人连接异常，请稍后重试。')
+    }
   }
 
   closeRoom() {
@@ -214,6 +206,16 @@ export default class MainController {
 
   createColyseusClient() {
     return new Client(getColyseusEndpoint())
+  }
+
+  handleMissingAuth() {
+    this.online = false
+    this.view.renderState(createStatusState('请先登录后进入房间。'))
+    if (this.view.backToLogin) this.view.backToLogin('请先登录后进入房间。')
+  }
+
+  showDisconnectedError() {
+    if (this.view.showError) this.view.showError('未连接到多人房间。')
   }
 }
 

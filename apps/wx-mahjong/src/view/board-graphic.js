@@ -1,5 +1,5 @@
 import { Graphic } from '@repo/mc2d';
-import { tileInfo } from '../server/tiles.js';
+import { tileInfo } from '../mahjong/tiles.js';
 
 const PLAYER_POS = ['bottom', 'right', 'top', 'left'];
 const TILE_SPRITE = {
