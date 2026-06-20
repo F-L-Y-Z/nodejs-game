@@ -1,8 +1,13 @@
 import { createWeChatApp } from '@repo/mc2d';
+import LoginView from './login-view';
 import MainView from './main-view';
 
 const app = createWeChatApp({ fps: 60 });
-const view = new MainView(app);
+const loginView = new LoginView(app, {
+  onLogin(authSession) {
+    app.setRoot(new MainView(app, authSession));
+  },
+});
 
-app.start(view);
-view.startLogin();
+app.start(loginView);
+loginView.startLogin();
