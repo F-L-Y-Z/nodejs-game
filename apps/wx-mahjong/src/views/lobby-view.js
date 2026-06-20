@@ -1,5 +1,6 @@
 import { Button, Container, Shape, Text, anchor } from '@repo/mc2d';
-import { clearCachedAuthSession } from './auth/wechat-login.js';
+import { clearCachedAuthSession } from '../auth/wechat-login.js';
+import { requestJoinInfo } from '../utils/prompts.js';
 import LoginView from './login-view.js';
 import MainView from './main-view.js';
 
@@ -74,8 +75,7 @@ export default class LobbyView extends Container {
   }
 
   async handleCreate() {
-    const config = await requestRoomConfig();
-    if (!config) return;
+    const config = { timeoutSeconds: 30, password: '' };
     this.enterRoom(Object.assign({ createRoom: true }, config));
   }
 
@@ -100,69 +100,4 @@ export default class LobbyView extends Container {
     this.statusText.text = text;
     this.invalidatePaint();
   }
-}
-
-function requestJoinInfo() {
-  if (globalThis.wx && globalThis.wx.showModal) {
-    return new Promise((resolve) => {
-      globalThis.wx.showModal({
-        title: '加入房间',
-        placeholderText: '房间号,密码可选',
-        editable: true,
-        success(result) {
-          resolve(result && result.confirm ? parseJoinInfo(result.content) : { roomId: '', password: '' });
-        },
-        fail() {
-          resolve({ roomId: '', password: '' });
-        },
-      });
-    });
-  }
-
-  if (globalThis.prompt) {
-    return Promise.resolve(parseJoinInfo(globalThis.prompt('房间号,密码可选') || ''));
-  }
-
-  return Promise.resolve({ roomId: '', password: '' });
-}
-
-function requestRoomConfig() {
-  if (globalThis.wx && globalThis.wx.showModal) {
-    return new Promise((resolve) => {
-      globalThis.wx.showModal({
-        title: '创建房间',
-        placeholderText: '超时秒数,密码可选，如 30,1234',
-        editable: true,
-        success(result) {
-          resolve(result && result.confirm ? parseRoomConfig(result.content) : null);
-        },
-        fail() {
-          resolve(null);
-        },
-      });
-    });
-  }
-
-  if (globalThis.prompt) {
-    return Promise.resolve(parseRoomConfig(globalThis.prompt('超时秒数,密码可选，如 30,1234') || ''));
-  }
-
-  return Promise.resolve({ timeoutSeconds: 30, password: '' });
-}
-
-function parseJoinInfo(value) {
-  const parts = String(value || '').split(',').map((item) => item.trim());
-  return {
-    roomId: parts[0] || '',
-    password: parts[1] || '',
-  };
-}
-
-function parseRoomConfig(value) {
-  const parts = String(value || '').split(',').map((item) => item.trim());
-  const timeoutSeconds = Number(parts[0] || 30);
-  return {
-    timeoutSeconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30,
-    password: parts[1] || '',
-  };
 }

@@ -1487,7 +1487,37 @@
     };
   }
 
-  // src/login-view.js
+  // src/utils/prompts.js
+  function requestJoinInfo() {
+    if (globalThis.wx && globalThis.wx.showModal) {
+      return new Promise((resolve) => {
+        globalThis.wx.showModal({
+          title: "\u52A0\u5165\u623F\u95F4",
+          placeholderText: "\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009",
+          editable: true,
+          success(result) {
+            resolve(result && result.confirm ? parseJoinInfo(result.content) : { roomId: "", password: "" });
+          },
+          fail() {
+            resolve({ roomId: "", password: "" });
+          }
+        });
+      });
+    }
+    if (globalThis.prompt) {
+      return Promise.resolve(parseJoinInfo(globalThis.prompt("\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009") || ""));
+    }
+    return Promise.resolve({ roomId: "", password: "" });
+  }
+  function parseJoinInfo(value) {
+    const parts = String(value || "").split(",").map((item) => item.trim());
+    return {
+      roomId: parts[0] || "",
+      password: parts[1] || ""
+    };
+  }
+
+  // src/views/login-view.js
   var LoginView = class extends Container {
     constructor(app2, options = {}) {
       super();
@@ -8946,7 +8976,7 @@ Schema instances may only have up to 64 fields.`);
   registerSerializer("schema", SchemaSerializer);
   registerSerializer("none", NoneSerializer);
 
-  // src/main-controller.js
+  // src/controllers/game-controller.js
   var ROOM_NAME = "mahjong_room";
   var CLIENT_MESSAGES = {
     MahjongAction: "mahjong_action"
@@ -8955,7 +8985,7 @@ Schema instances may only have up to 64 fields.`);
     MahjongSnapshot: "mahjong_snapshot",
     MahjongError: "mahjong_error"
   };
-  var MainController = class {
+  var GameController = class {
     constructor(view2, authSession = null, roomOptions = {}) {
       this.view = view2;
       this.authSession = authSession;
@@ -8971,42 +9001,11 @@ Schema instances may only have up to 64 fields.`);
         this.handleMissingAuth();
       }
     }
+    // --- Public API ---
     setAuthSession(authSession) {
       this.authSession = authSession;
       if (authSession && authSession.token && !this.online) {
         this.connect();
-      }
-    }
-    async connect() {
-      this.closeRoom();
-      this.view.renderState(createStatusState("\u6B63\u5728\u8FDE\u63A5\u591A\u4EBA\u724C\u5C40..."));
-      try {
-        const user = this.authSession && this.authSession.user || {};
-        const options = {
-          token: this.authSession.token,
-          name: user.displayName || user.name || "player",
-          password: this.roomOptions.password || "",
-          timeoutSeconds: this.roomOptions.timeoutSeconds || 30
-        };
-        const client = this.createColyseusClient();
-        const room = this.roomId ? await client.joinById(this.roomId, options) : await client.create(ROOM_NAME, options);
-        this.client = client;
-        this.room = room;
-        this.online = true;
-        this.roomId = room.roomId || room.id || this.roomId;
-        this.bindRoom(room);
-      } catch (error) {
-        console.warn("[wx-mahjong] multiplayer connect failed", error);
-        if (error && error.statusCode === 401 && this.view.backToLogin) {
-          this.view.backToLogin("\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55\u3002");
-        } else if (error && (error.statusCode === 404 || error.statusCode === 409 || error.statusCode === 410) && this.view.backToLobby) {
-          this.view.backToLobby(error.message || "\u623F\u95F4\u4E0D\u53EF\u7528\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
-        } else {
-          this.closeRoom();
-          this.online = false;
-          if (this.view.backToLobby) this.view.backToLobby(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
-          else if (this.view.showError) this.view.showError(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
-        }
       }
     }
     restart() {
@@ -9041,6 +9040,50 @@ Schema instances may only have up to 64 fields.`);
       if (this.online) this.sendAction("hu");
       else this.showDisconnectedError();
     }
+    // --- Connection ---
+    async connect() {
+      this.closeRoom();
+      this.view.renderState(createStatusState("\u6B63\u5728\u8FDE\u63A5\u591A\u4EBA\u724C\u5C40..."));
+      try {
+        const user = this.authSession && this.authSession.user || {};
+        const options = {
+          token: this.authSession.token,
+          name: user.displayName || user.name || "player",
+          password: this.roomOptions.password || "",
+          timeoutSeconds: this.roomOptions.timeoutSeconds || 30
+        };
+        const client = this.createColyseusClient();
+        const room = this.roomId ? await client.joinById(this.roomId, options) : await client.create(ROOM_NAME, options);
+        this.client = client;
+        this.room = room;
+        this.online = true;
+        this.roomId = room.roomId || room.id || this.roomId;
+        this.bindRoom(room);
+      } catch (error) {
+        console.warn("[wx-mahjong] multiplayer connect failed", error);
+        this.handleConnectError(error);
+      }
+    }
+    handleConnectError(error) {
+      const statusCode = error && error.statusCode;
+      if (statusCode === 401 && this.view.backToLogin) {
+        this.view.backToLogin("\u767B\u5F55\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55\u3002");
+      } else if ((statusCode === 404 || statusCode === 409 || statusCode === 410) && this.view.backToLobby) {
+        this.view.backToLobby(error.message || "\u623F\u95F4\u4E0D\u53EF\u7528\uFF0C\u8BF7\u91CD\u65B0\u521B\u5EFA\u6216\u52A0\u5165\u3002");
+      } else {
+        this.closeRoom();
+        this.online = false;
+        if (this.view.backToLobby) this.view.backToLobby(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+        else if (this.view.showError) this.view.showError(error.message || "\u8FDE\u63A5\u623F\u95F4\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+      }
+    }
+    closeRoom() {
+      if (!this.room) return;
+      const room = this.room;
+      this.room = null;
+      room.leave();
+    }
+    // --- Messaging ---
     async sendAction(action, payload = {}) {
       if (!this.roomId) return;
       if (!this.room) return;
@@ -9081,6 +9124,7 @@ Schema instances may only have up to 64 fields.`);
         this.handleRequestError(error);
       });
     }
+    // --- State / error handling ---
     renderResponseState(data) {
       if (data && data.roomId) this.roomId = data.roomId;
       if (data && data.state) {
@@ -9122,15 +9166,6 @@ Schema instances may only have up to 64 fields.`);
         this.view.backToLobby(error.message || "\u591A\u4EBA\u8FDE\u63A5\u5F02\u5E38\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
       }
     }
-    closeRoom() {
-      if (!this.room) return;
-      const room = this.room;
-      this.room = null;
-      room.leave();
-    }
-    createColyseusClient() {
-      return new Client(getServerBaseUrl2());
-    }
     handleMissingAuth() {
       this.online = false;
       this.view.renderState(createStatusState("\u8BF7\u5148\u767B\u5F55\u540E\u8FDB\u5165\u623F\u95F4\u3002"));
@@ -9138,6 +9173,10 @@ Schema instances may only have up to 64 fields.`);
     }
     showDisconnectedError() {
       if (this.view.showError) this.view.showError("\u672A\u8FDE\u63A5\u5230\u591A\u4EBA\u623F\u95F4\u3002");
+    }
+    // --- Internal ---
+    createColyseusClient() {
+      return new Client(getServerBaseUrl2());
     }
   };
   function createClientId() {
@@ -9206,7 +9245,7 @@ Schema instances may only have up to 64 fields.`);
     };
   }
 
-  // src/view/board-graphic.js
+  // src/views/board/renderers.js
   var PLAYER_POS = ["bottom", "right", "top", "left"];
   var TILE_SPRITE = {
     src: "images/sprite.png",
@@ -9230,60 +9269,6 @@ Schema instances may only have up to 64 fields.`);
   }
   function getRemainingSeconds(deadlineAt) {
     return Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1e3));
-  }
-  function getActionItems(state) {
-    const actions = [];
-    const enabled = state && state.actions ? state.actions : {};
-    if (enabled.ready) actions.push({ key: "ready", label: "\u51C6\u5907" });
-    if (enabled.leave) actions.push({ key: "leave", label: "\u9000\u51FA" });
-    if (enabled.pass) actions.push({ key: "pass", label: "\u8FC7" });
-    if (enabled.peng) actions.push({ key: "peng", label: "\u78B0" });
-    if (enabled.gang) actions.push({ key: "gang", label: "\u6760" });
-    if (enabled.hu) actions.push({ key: "hu", label: "\u80E1" });
-    (enabled.gangTiles || []).forEach((tile) => actions.push({ key: `gang:${tile}`, label: "\u6697\u6760", tile }));
-    if (state && state.phase === "round-over") actions.push({ key: "restart", label: "\u91CD\u5F00" });
-    return actions;
-  }
-  function getBoardMetrics(width, height) {
-    const safeWidth = width || 375;
-    const safeHeight = height || 667;
-    const isLandscape = safeWidth > safeHeight;
-    const edgePad = isLandscape ? 18 : 8;
-    const bottomPad = isLandscape ? 10 : 18;
-    const gap = isLandscape ? 4 : safeWidth < 360 ? 2 : 3;
-    const maxTileW = isLandscape ? 40 : 42;
-    const minTileW = isLandscape ? 26 : 18;
-    const drawnGap = isLandscape ? 16 : safeWidth < 360 ? 8 : 10;
-    const availableHandW = Math.max(260, safeWidth - edgePad * 2);
-    const tileW = Math.floor(clamp((availableHandW - drawnGap - gap * 13) / 14, minTileW, maxTileW));
-    const tileH = Math.round(tileW * 1.42);
-    const handWidth = tileW * 14 + gap * 13 + drawnGap;
-    const handX = Math.max(edgePad, (safeWidth - handWidth) / 2);
-    const handY = safeHeight - tileH - bottomPad;
-    const sideRail = isLandscape ? clamp(safeWidth * 0.12, 80, 124) : clamp(safeWidth * 0.12, 36, 52);
-    const tableLeft = sideRail;
-    const tableRight = safeWidth - sideRail;
-    const tableTop = isLandscape ? 54 : 112;
-    const meldY = handY - (isLandscape ? 38 : 42);
-    const tableBottom = Math.max(tableTop + 120, meldY - (isLandscape ? 12 : 18));
-    const centerX = safeWidth / 2;
-    const centerY = (tableTop + tableBottom) / 2;
-    return {
-      centerX,
-      centerY,
-      drawnGap,
-      gap,
-      handX,
-      handY,
-      isLandscape,
-      meldY,
-      tableBottom,
-      tableLeft,
-      tableRight,
-      tableTop,
-      tileH,
-      tileW
-    };
   }
   function drawRoundRect(ctx, x, y, width, height, radius) {
     ctx.beginPath();
@@ -9401,6 +9386,62 @@ Schema instances may only have up to 64 fields.`);
       });
     });
   }
+
+  // src/views/board/layout.js
+  function getActionItems(state) {
+    const actions = [];
+    const enabled = state && state.actions ? state.actions : {};
+    if (enabled.ready) actions.push({ key: "ready", label: "\u51C6\u5907" });
+    if (enabled.leave) actions.push({ key: "leave", label: "\u9000\u51FA" });
+    if (enabled.pass) actions.push({ key: "pass", label: "\u8FC7" });
+    if (enabled.peng) actions.push({ key: "peng", label: "\u78B0" });
+    if (enabled.gang) actions.push({ key: "gang", label: "\u6760" });
+    if (enabled.hu) actions.push({ key: "hu", label: "\u80E1" });
+    (enabled.gangTiles || []).forEach((tile) => actions.push({ key: `gang:${tile}`, label: "\u6697\u6760", tile }));
+    if (state && state.phase === "round-over") actions.push({ key: "restart", label: "\u91CD\u5F00" });
+    return actions;
+  }
+  function getBoardMetrics(width, height) {
+    const safeWidth = width || 375;
+    const safeHeight = height || 667;
+    const isLandscape = safeWidth > safeHeight;
+    const edgePad = isLandscape ? 18 : 8;
+    const bottomPad = isLandscape ? 10 : 18;
+    const gap = isLandscape ? 4 : safeWidth < 360 ? 2 : 3;
+    const maxTileW = isLandscape ? 40 : 42;
+    const minTileW = isLandscape ? 26 : 18;
+    const drawnGap = isLandscape ? 16 : safeWidth < 360 ? 8 : 10;
+    const availableHandW = Math.max(260, safeWidth - edgePad * 2);
+    const tileW = Math.floor(clamp((availableHandW - drawnGap - gap * 13) / 14, minTileW, maxTileW));
+    const tileH = Math.round(tileW * 1.42);
+    const handWidth = tileW * 14 + gap * 13 + drawnGap;
+    const handX = Math.max(edgePad, (safeWidth - handWidth) / 2);
+    const handY = safeHeight - tileH - bottomPad;
+    const sideRail = isLandscape ? clamp(safeWidth * 0.12, 80, 124) : clamp(safeWidth * 0.12, 36, 52);
+    const tableLeft = sideRail;
+    const tableRight = safeWidth - sideRail;
+    const tableTop = isLandscape ? 54 : 112;
+    const meldY = handY - (isLandscape ? 38 : 42);
+    const tableBottom = Math.max(tableTop + 120, meldY - (isLandscape ? 12 : 18));
+    const centerX = safeWidth / 2;
+    const centerY = (tableTop + tableBottom) / 2;
+    return {
+      centerX,
+      centerY,
+      drawnGap,
+      gap,
+      handX,
+      handY,
+      isLandscape,
+      meldY,
+      tableBottom,
+      tableLeft,
+      tableRight,
+      tableTop,
+      tileH,
+      tileW
+    };
+  }
   function rowsInRange(top, bottom) {
     return Math.max(1, Math.floor((bottom - top - MINI_TILE_H) / DISCARD_STEP_Y) + 1);
   }
@@ -9417,10 +9458,7 @@ Schema instances may only have up to 64 fields.`);
     const topEndY = metrics.centerY - 8;
     const bottomStartY = metrics.centerY + 8;
     const bottomEndY = metrics.tableBottom;
-    const verticalStartY = Math.max(
-      topStartY,
-      metrics.tableTop + 40 + sideMeldRows * (MELD_TILE_H + 4) + 8
-    );
+    const verticalStartY = Math.max(topStartY, metrics.tableTop + 40 + sideMeldRows * (MELD_TILE_H + 4) + 8);
     const verticalEndY = metrics.tableBottom;
     if (index === 0 || index === 2) {
       const cols2 = metrics.isLandscape ? 8 : 5;
@@ -9482,6 +9520,8 @@ Schema instances may only have up to 64 fields.`);
       })
     );
   }
+
+  // src/views/board/board-graphic.js
   var BoardGraphic = class extends Graphic {
     constructor(assetManager) {
       super();
@@ -9520,6 +9560,7 @@ Schema instances may only have up to 64 fields.`);
       this.drawStatus(ctx, state, x, y, width, metrics, spriteAsset);
       this.drawHand(ctx, state, width, height, spriteAsset);
     }
+    // --- Private helpers ---
     getSpriteAsset() {
       if (!this.spriteAsset && this.assets) {
         this.spriteAsset = this.assets.image(TILE_SPRITE.src);
@@ -9565,14 +9606,7 @@ Schema instances may only have up to 64 fields.`);
         const readyText = state.roomStatus === "waiting" || state.roomStatus === "settling" ? ` ${player.isReady ? "\u5DF2\u51C6\u5907" : "\u672A\u51C6\u5907"}` : "";
         const label = `${player.name}${readyText}${countdownText}`;
         if (pos === "bottom") {
-          drawText(
-            ctx,
-            label,
-            x + Math.max(18, metrics.handX - 18),
-            y + metrics.handY + metrics.tileH / 2,
-            13,
-            color
-          );
+          drawText(ctx, label, x + Math.max(18, metrics.handX - 18), y + metrics.handY + metrics.tileH / 2, 13, color);
         } else if (pos === "top") {
           drawText(ctx, `${label} ${player.handCount}\u5F20`, x + width / 2, y + metrics.tableTop - 16, 13, color);
         } else if (pos === "left") {
@@ -9602,7 +9636,15 @@ Schema instances may only have up to 64 fields.`);
       const sideMaxWidth = getSideMeldMaxWidth(width, metrics);
       drawMeldRows(ctx, state.players[2].melds, x + 12, y + metrics.tableTop + 6, topMaxWidth, spriteAsset);
       drawMeldRows(ctx, state.players[3].melds, x + 12, y + metrics.tableTop + 40, sideMaxWidth, spriteAsset);
-      drawMeldRows(ctx, state.players[1].melds, x + width - 12 - sideMaxWidth, y + metrics.tableTop + 40, sideMaxWidth, spriteAsset, "right");
+      drawMeldRows(
+        ctx,
+        state.players[1].melds,
+        x + width - 12 - sideMaxWidth,
+        y + metrics.tableTop + 40,
+        sideMaxWidth,
+        spriteAsset,
+        "right"
+      );
       let mx = metrics.isLandscape ? 18 : 12;
       const actionLayout = getActionLayout(state, width, height);
       const my = actionLayout.length ? Math.max(metrics.tableTop + 8, actionLayout[0].y - 42) : metrics.meldY;
@@ -9624,7 +9666,7 @@ Schema instances may only have up to 64 fields.`);
     }
   };
 
-  // src/main-view.js
+  // src/views/main-view.js
   var MainView = class extends Container {
     constructor(app2, authSession = null, roomOptions = {}) {
       super();
@@ -9636,7 +9678,7 @@ Schema instances may only have up to 64 fields.`);
       this.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
       this.board = this.addChild(new BoardGraphic(app2.assets));
       this.board.setLayout(anchor({ anchor: "top-left", width: "100%", height: "100%" }));
-      this.controller = new MainController(this, authSession, roomOptions);
+      this.controller = new GameController(this, authSession, roomOptions);
     }
     renderState(state) {
       this.state = state;
@@ -9729,7 +9771,7 @@ Schema instances may only have up to 64 fields.`);
     }
   };
 
-  // src/lobby-view.js
+  // src/views/lobby-view.js
   var LobbyView = class _LobbyView extends Container {
     constructor(app2, authSession, options = {}) {
       super();
@@ -9792,8 +9834,7 @@ Schema instances may only have up to 64 fields.`);
       this.enterRoom({ roomId, password });
     }
     async handleCreate() {
-      const config = await requestRoomConfig();
-      if (!config) return;
+      const config = { timeoutSeconds: 30, password: "" };
       this.enterRoom(Object.assign({ createRoom: true }, config));
     }
     enterRoom(options) {
@@ -9816,63 +9857,6 @@ Schema instances may only have up to 64 fields.`);
       this.invalidatePaint();
     }
   };
-  function requestJoinInfo() {
-    if (globalThis.wx && globalThis.wx.showModal) {
-      return new Promise((resolve) => {
-        globalThis.wx.showModal({
-          title: "\u52A0\u5165\u623F\u95F4",
-          placeholderText: "\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009",
-          editable: true,
-          success(result) {
-            resolve(result && result.confirm ? parseJoinInfo(result.content) : { roomId: "", password: "" });
-          },
-          fail() {
-            resolve({ roomId: "", password: "" });
-          }
-        });
-      });
-    }
-    if (globalThis.prompt) {
-      return Promise.resolve(parseJoinInfo(globalThis.prompt("\u623F\u95F4\u53F7,\u5BC6\u7801\u53EF\u9009") || ""));
-    }
-    return Promise.resolve({ roomId: "", password: "" });
-  }
-  function requestRoomConfig() {
-    if (globalThis.wx && globalThis.wx.showModal) {
-      return new Promise((resolve) => {
-        globalThis.wx.showModal({
-          title: "\u521B\u5EFA\u623F\u95F4",
-          placeholderText: "\u8D85\u65F6\u79D2\u6570,\u5BC6\u7801\u53EF\u9009\uFF0C\u5982 30,1234",
-          editable: true,
-          success(result) {
-            resolve(result && result.confirm ? parseRoomConfig(result.content) : null);
-          },
-          fail() {
-            resolve(null);
-          }
-        });
-      });
-    }
-    if (globalThis.prompt) {
-      return Promise.resolve(parseRoomConfig(globalThis.prompt("\u8D85\u65F6\u79D2\u6570,\u5BC6\u7801\u53EF\u9009\uFF0C\u5982 30,1234") || ""));
-    }
-    return Promise.resolve({ timeoutSeconds: 30, password: "" });
-  }
-  function parseJoinInfo(value) {
-    const parts = String(value || "").split(",").map((item) => item.trim());
-    return {
-      roomId: parts[0] || "",
-      password: parts[1] || ""
-    };
-  }
-  function parseRoomConfig(value) {
-    const parts = String(value || "").split(",").map((item) => item.trim());
-    const timeoutSeconds = Number(parts[0] || 30);
-    return {
-      timeoutSeconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30,
-      password: parts[1] || ""
-    };
-  }
 
   // src/index.js
   var app = createWeChatApp({ fps: 60 });

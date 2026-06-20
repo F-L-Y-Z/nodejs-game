@@ -1,6 +1,6 @@
 import { createWeChatApp } from '@repo/mc2d';
-import LobbyView from './lobby-view';
-import LoginView from './login-view';
+import LobbyView from './views/lobby-view.js';
+import LoginView from './views/login-view.js';
 
 const app = createWeChatApp({ fps: 60 });
 const loginView = new LoginView(app, {

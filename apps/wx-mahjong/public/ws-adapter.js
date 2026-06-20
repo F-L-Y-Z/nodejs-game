@@ -263,6 +263,134 @@
     });
   }
 
+  var normalizeHeaderName = function(name) {
+    return String(name).toLowerCase();
+  };
+
+  var normalizeHeaderValue = function(value) {
+    return String(value);
+  };
+
+  var polyfillHeaders = function() {
+    var Headers = function(init) {
+      Object.defineProperty(this, '_entries', { writable: true, value: {} });
+
+      if (!init) {
+        return;
+      }
+
+      if (init instanceof Headers) {
+        var _this = this;
+        init.forEach(function(value, name) {
+          _this.append(name, value);
+        });
+      } else if (Object.prototype.toString.call(init) === '[object Array]') {
+        for (var i = 0; i < init.length; i++) {
+          this.append(init[i][0], init[i][1]);
+        }
+      } else if (typeof init === 'object') {
+        for (var key in init) {
+          if (Object.prototype.hasOwnProperty.call(init, key)) {
+            this.append(key, init[key]);
+          }
+        }
+      }
+    };
+
+    var proto = Headers.prototype;
+
+    proto.append = function(name, value) {
+      var key = normalizeHeaderName(name);
+      var normalizedValue = normalizeHeaderValue(value);
+      this._entries[key] = this._entries[key]
+        ? this._entries[key] + ', ' + normalizedValue
+        : normalizedValue;
+    };
+
+    proto.delete = function(name) {
+      delete this._entries[normalizeHeaderName(name)];
+    };
+
+    proto.get = function(name) {
+      var key = normalizeHeaderName(name);
+      return Object.prototype.hasOwnProperty.call(this._entries, key)
+        ? this._entries[key]
+        : null;
+    };
+
+    proto.has = function(name) {
+      return Object.prototype.hasOwnProperty.call(this._entries, normalizeHeaderName(name));
+    };
+
+    proto.set = function(name, value) {
+      this._entries[normalizeHeaderName(name)] = normalizeHeaderValue(value);
+    };
+
+    proto.forEach = function(callback, thisArg) {
+      for (var key in this._entries) {
+        if (Object.prototype.hasOwnProperty.call(this._entries, key)) {
+          callback.call(thisArg, this._entries[key], key, this);
+        }
+      }
+    };
+
+    proto.keys = function() {
+      var items = [];
+      this.forEach(function(value, name) {
+        items.push(name);
+      });
+      return createIterator(items);
+    };
+
+    proto.values = function() {
+      var items = [];
+      this.forEach(function(value) {
+        items.push(value);
+      });
+      return createIterator(items);
+    };
+
+    proto.entries = function() {
+      var items = [];
+      this.forEach(function(value, name) {
+        items.push([name, value]);
+      });
+      return createIterator(items);
+    };
+
+    if (iteratorSupported) {
+      proto[Symbol.iterator] = proto.entries;
+    }
+
+    global.Headers = Headers;
+    if (typeof globalThis !== 'undefined') {
+      globalThis.Headers = Headers;
+    }
+    if (global.window) {
+      global.window.Headers = Headers;
+    }
+  };
+
+  var checkIfHeadersSupported = function() {
+    try {
+      var Headers = global.Headers;
+      var headers = new Headers({ 'Content-Type': 'application/json' });
+      headers.append('Accept', 'text/plain');
+
+      return (
+        (headers.get('content-type') === 'application/json') &&
+        headers.has('accept') &&
+        (typeof Headers.prototype.forEach === 'function')
+      );
+    } catch (e) {
+      return false;
+    }
+  };
+
+  if (!checkIfHeadersSupported()) {
+    polyfillHeaders();
+  }
+
   // HTMLAnchorElement
 
 })(

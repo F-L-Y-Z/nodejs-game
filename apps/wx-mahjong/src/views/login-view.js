@@ -1,5 +1,5 @@
 import { Button, Container, Shape, Text, anchor } from '@repo/mc2d';
-import { getCachedAuthSession, loginWechatMiniGame } from './auth/wechat-login.js';
+import { getCachedAuthSession, loginWechatMiniGame } from '../auth/wechat-login.js';
 
 export default class LoginView extends Container {
   constructor(app, options = {}) {

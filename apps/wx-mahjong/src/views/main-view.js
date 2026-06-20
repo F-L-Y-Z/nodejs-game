@@ -1,8 +1,8 @@
 import { Button, Container, anchor } from '@repo/mc2d';
+import GameController from '../controllers/game-controller.js';
+import BoardGraphic, { getActionLayout, getHandHitRects } from './board/index.js';
 import LobbyView from './lobby-view.js';
 import LoginView from './login-view.js';
-import MainController from './main-controller.js';
-import BoardGraphic, { getActionLayout, getHandHitRects } from './view/board-graphic.js';
 
 export default class MainView extends Container {
   constructor(app, authSession = null, roomOptions = {}) {
@@ -16,7 +16,7 @@ export default class MainView extends Container {
     this.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
     this.board = this.addChild(new BoardGraphic(app.assets));
     this.board.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
-    this.controller = new MainController(this, authSession, roomOptions);
+    this.controller = new GameController(this, authSession, roomOptions);
   }
 
   renderState(state) {
