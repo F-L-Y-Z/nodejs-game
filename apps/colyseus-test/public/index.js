@@ -50,6 +50,26 @@
     }
   });
 
+  // src/ws.js
+  var NativeWebSocket = window.WebSocket;
+  window.WebSocket = class {
+    constructor(url, protocols) {
+      const ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
+      console.log("[ws] create", url);
+      ws.addEventListener("open", (e) => console.log("[ws] open", e));
+      ws.addEventListener("message", (e) => console.log("[ws] message", e.data));
+      ws.addEventListener("error", (e) => console.log("[ws] error", e));
+      ws.addEventListener("close", (e) => console.log("[ws] close", e.code, e.reason));
+      const send = ws.send.bind(ws);
+      ws.send = (data) => {
+        console.log("[ws] send", data);
+        return send(data);
+      };
+      return ws;
+    }
+  };
+  window.WebSocket.prototype = NativeWebSocket.prototype;
+
   // ../../node_modules/.pnpm/@colyseus+sdk@0.17.43_@colyseus+core@0.17.43_typescript@6.0.3/node_modules/@colyseus/sdk/build/legacy.mjs
   if (!ArrayBuffer.isView) {
     ArrayBuffer.isView = (a) => {
@@ -6225,7 +6245,7 @@ Schema instances may only have up to 64 fields.`);
 
   // ../../node_modules/.pnpm/@colyseus+sdk@0.17.43_@colyseus+core@0.17.43_typescript@6.0.3/node_modules/@colyseus/sdk/build/transport/WebSocketTransport.mjs
   var import_ws = __toESM(require_browser(), 1);
-  var WebSocket2 = globalThis.WebSocket || import_ws.default;
+  var WebSocket = globalThis.WebSocket || import_ws.default;
   var WebSocketTransport = class {
     constructor(events) {
       __publicField(this, "ws");
@@ -6245,9 +6265,9 @@ Schema instances may only have up to 64 fields.`);
      */
     connect(url, headers) {
       try {
-        this.ws = new WebSocket2(url, { headers, protocols: this.protocols });
+        this.ws = new WebSocket(url, { headers, protocols: this.protocols });
       } catch (e) {
-        this.ws = new WebSocket2(url, this.protocols);
+        this.ws = new WebSocket(url, this.protocols);
       }
       this.ws.binaryType = "arraybuffer";
       this.ws.onopen = (event) => this.events.onopen?.(event);
@@ -6263,7 +6283,7 @@ Schema instances may only have up to 64 fields.`);
       this.ws.close(code, reason);
     }
     get isOpen() {
-      return this.ws.readyState === WebSocket2.OPEN;
+      return this.ws.readyState === WebSocket.OPEN;
     }
   };
 
@@ -7424,9 +7444,6 @@ Schema instances may only have up to 64 fields.`);
   registerSerializer("none", NoneSerializer);
 
   // src/index.js
-  console.log(typeof fetch);
-  console.log(typeof Headers);
-  console.log(typeof WebSocket);
   var client = null;
   var room = null;
   var $ = (id) => document.getElementById(id);

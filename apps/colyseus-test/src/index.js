@@ -1,8 +1,5 @@
+import './ws.js';
 import { Client } from '@colyseus/sdk';
-
-console.log(typeof fetch);
-console.log(typeof Headers);
-console.log(typeof WebSocket);
 
 // ---- Global State ----
 let client = null;
