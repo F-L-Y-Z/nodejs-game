@@ -9,6 +9,7 @@ import {
   clamp,
   drawMeldRows,
   drawMiniTile,
+  drawRoundRect,
   drawText,
   drawTile,
   getRemainingSeconds,
@@ -20,6 +21,7 @@ export default class BoardGraphic extends Graphic {
     this.assets = assetManager;
     this.state = null;
     this.spriteAsset = null;
+    this.avatarAssets = Object.create(null);
   }
 
   setState(state) {
@@ -54,6 +56,7 @@ export default class BoardGraphic extends Graphic {
     this.drawMelds(ctx, state, x, y, width, height, metrics, spriteAsset);
     this.drawPlayers(ctx, state, x, y, width, height, metrics);
     this.drawDiscards(ctx, state, x, y, width, height, metrics, spriteAsset);
+    this.drawRevealedHands(ctx, state, x, y, width, metrics, spriteAsset);
     this.drawStatus(ctx, state, x, y, width, metrics, spriteAsset);
     this.drawHand(ctx, state, width, height, spriteAsset);
   }
@@ -66,6 +69,15 @@ export default class BoardGraphic extends Graphic {
       this.spriteAsset.promise.then(() => this.invalidatePaint()).catch(() => this.invalidatePaint());
     }
     return this.spriteAsset;
+  }
+
+  getAvatarAsset(url) {
+    if (!url || !this.assets) return null;
+    if (!this.avatarAssets[url]) {
+      this.avatarAssets[url] = this.assets.image(url);
+      this.avatarAssets[url].promise.then(() => this.invalidatePaint()).catch(() => this.invalidatePaint());
+    }
+    return this.avatarAssets[url];
   }
 
   drawHeader(ctx, state, x, y, width, metrics, spriteAsset) {
@@ -112,17 +124,56 @@ export default class BoardGraphic extends Graphic {
           : '';
       const label = `${player.name}${readyText}${countdownText}`;
       if (pos === 'bottom') {
-        drawText(ctx, label, x + Math.max(18, metrics.handX - 18), y + metrics.handY + metrics.tileH / 2, 13, color);
+        const ax = x + Math.max(12, metrics.handX - 54);
+        const ay = y + metrics.handY + metrics.tileH / 2 - 16;
+        this.drawAvatar(ctx, player, ax, ay, 30, active);
+        drawText(ctx, label, ax + 38, y + metrics.handY + metrics.tileH / 2, 13, color, 'left', 140);
       } else if (pos === 'top') {
-        drawText(ctx, `${label} ${player.handCount}张`, x + width / 2, y + metrics.tableTop - 16, 13, color);
+        const ax = x + width / 2 - 70;
+        const ay = y + metrics.tableTop - 32;
+        this.drawAvatar(ctx, player, ax, ay, 26, active);
+        drawText(ctx, `${label} ${player.handCount}张`, ax + 34, y + metrics.tableTop - 16, 13, color, 'left', 150);
       } else if (pos === 'left') {
         const nameX = metrics.isLandscape ? metrics.tableLeft - 50 : 20;
+        const ax = x + nameX - (metrics.isLandscape ? 13 : 0);
+        const ay = y + metrics.centerY - 112;
+        this.drawAvatar(ctx, player, ax, ay, 26, active);
         drawText(ctx, `${label} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       } else if (pos === 'right') {
         const nameX = metrics.isLandscape ? metrics.tableRight + 50 : width - 20;
+        const ax = x + nameX - 13;
+        const ay = y + metrics.centerY - 112;
+        this.drawAvatar(ctx, player, ax, ay, 26, active);
         drawText(ctx, `${label} ${player.handCount}张`, x + nameX, y + metrics.centerY - 76, 13, color);
       }
     });
+  }
+
+  drawAvatar(ctx, player, x, y, size, active) {
+    const radius = size / 2;
+    const asset = this.getAvatarAsset(player.avatarUrl);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + radius, y + radius, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = player.isHuman ? '#3a78d8' : '#6c7a72';
+    ctx.fill();
+
+    if (asset && asset.status === 'loaded') {
+      ctx.clip();
+      ctx.drawImage(asset.image, x, y, size, size);
+    } else {
+      const text = String(player.name || '?').slice(0, 1);
+      drawText(ctx, text, x + radius, y + radius + 1, Math.max(12, size * 0.42), '#fff');
+    }
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(x + radius, y + radius, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = active ? '#ffd86b' : 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.stroke();
   }
 
   drawDiscards(ctx, state, x, y, width, height, metrics, spriteAsset) {
@@ -163,6 +214,32 @@ export default class BoardGraphic extends Graphic {
         mx += 26;
       });
       mx += 8;
+    });
+  }
+
+  drawRevealedHands(ctx, state, x, y, width, metrics, spriteAsset) {
+    if (state.phase !== 'round-over' || state.winner === null) return;
+
+    const tileW = metrics.isLandscape ? 18 : 16;
+    const tileH = Math.round(tileW * 1.42);
+    const step = tileW + 2;
+    const rows = [
+      { index: 2, cx: width / 2, y: metrics.tableTop + (metrics.isLandscape ? 64 : 78), align: 'center' },
+      { index: 3, x: 12, y: metrics.centerY - 24, align: 'left' },
+      { index: 1, x: width - 12, y: metrics.centerY - 24, align: 'right' },
+    ];
+
+    rows.forEach((row) => {
+      const player = state.players[row.index];
+      if (!player || !player.hand || !player.hand.length || player.hand[0] === 'BACK') return;
+      const rowWidth = player.hand.length * tileW + Math.max(0, player.hand.length - 1) * 2;
+      const startX = row.align === 'center' ? row.cx - rowWidth / 2 : row.align === 'right' ? row.x - rowWidth : row.x;
+      drawRoundRect(ctx, x + startX - 4, y + row.y - 4, rowWidth + 8, tileH + 8, 5);
+      ctx.fillStyle = 'rgba(9,25,21,0.45)';
+      ctx.fill();
+      player.hand.forEach((tile, tileIndex) => {
+        drawTile(ctx, tile, x + startX + tileIndex * step, y + row.y, tileW, tileH, spriteAsset);
+      });
     });
   }
 

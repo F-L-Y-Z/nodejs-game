@@ -13,6 +13,7 @@ type MahjongPlayer = {
   clientId: string | null;
   userId: string | null;
   name: string;
+  avatarUrl: string;
   hand: string[];
   drawnTile: string | null;
   discards: string[];
@@ -37,6 +38,7 @@ export type MahjongSnapshot = {
   players: Array<{
     index: number;
     name: string;
+    avatarUrl: string;
     isHuman: boolean;
     isReady?: boolean;
     hand: string[];
@@ -74,9 +76,13 @@ export class MahjongTable {
     else this.message = '等待玩家准备。';
   }
 
-  addHuman(clientId: string, userId: string, name: string): number | null {
+  addHuman(clientId: string, userId: string, name: string, avatarUrl = ''): number | null {
     const existingSeat = this.getSeatByClient(clientId);
-    if (existingSeat !== null) return existingSeat;
+    if (existingSeat !== null) {
+      this.players[existingSeat].name = name;
+      this.players[existingSeat].avatarUrl = avatarUrl;
+      return existingSeat;
+    }
 
     const reusableSeat = this.players.findIndex((player) => !player.clientId);
     if (reusableSeat < 0) return null;
@@ -84,6 +90,7 @@ export class MahjongTable {
     this.players[reusableSeat].clientId = clientId;
     this.players[reusableSeat].userId = userId;
     this.players[reusableSeat].name = name;
+    this.players[reusableSeat].avatarUrl = avatarUrl;
     this.message = `${name}加入牌局。`;
     return reusableSeat;
   }
@@ -95,6 +102,7 @@ export class MahjongTable {
     player.clientId = null;
     player.userId = null;
     player.name = AI_NAMES[seat];
+    player.avatarUrl = '';
     this.message = `玩家离开，${player.name}接管。`;
   }
 
@@ -117,11 +125,12 @@ export class MahjongTable {
     return this.getHumanUserIds().length;
   }
 
-  getSeatInfos(): Array<{ index: number; userId: string | null; name: string; isHuman: boolean }> {
+  getSeatInfos(): Array<{ index: number; userId: string | null; name: string; avatarUrl: string; isHuman: boolean }> {
     return this.players.map((player, index) => ({
       index,
       userId: player.userId,
       name: player.name,
+      avatarUrl: player.avatarUrl,
       isHuman: Boolean(player.userId),
     }));
   }
@@ -140,6 +149,7 @@ export class MahjongTable {
       clientId: null,
       userId: null,
       name,
+      avatarUrl: '',
       hand: [],
       drawnTile: null,
       discards: [],
@@ -160,12 +170,14 @@ export class MahjongTable {
       clientId: player.clientId,
       userId: player.userId,
       name: player.clientId ? player.name : AI_NAMES[index],
+      avatarUrl: player.clientId ? player.avatarUrl : '',
     }));
     this.wall = shuffle(createDeck());
     this.players = AI_NAMES.map((name, index) => ({
       clientId: humans[index]?.clientId || null,
       userId: humans[index]?.userId || null,
       name: humans[index]?.name || name,
+      avatarUrl: humans[index]?.avatarUrl || '',
       hand: [],
       drawnTile: null,
       discards: [],
@@ -276,7 +288,8 @@ export class MahjongTable {
   private clonePlayerForView(tableSeat: number, viewSeat: number): MahjongSnapshot['players'][number] {
     const player = this.players[tableSeat];
     const ownSeat = viewSeat === 0;
-    const hand = ownSeat
+    const revealHand = this.phase === 'round-over' && this.winner !== null;
+    const hand = ownSeat || revealHand
       ? player.drawnTile
         ? player.hand.concat(player.drawnTile)
         : player.hand.slice()
@@ -284,9 +297,10 @@ export class MahjongTable {
     return {
       index: viewSeat,
       name: ownSeat ? '你' : player.name,
+      avatarUrl: player.avatarUrl,
       isHuman: Boolean(player.userId),
       hand,
-      drawnTile: ownSeat ? player.drawnTile : null,
+      drawnTile: ownSeat || revealHand ? player.drawnTile : null,
       handCount: this.getPlayerTiles(tableSeat).length,
       discards: player.discards.slice(),
       melds: cloneMelds(player.melds),
@@ -482,6 +496,7 @@ export class MahjongTable {
 
   private canCurrentHu(playerIndex: number): boolean {
     const player = this.players[playerIndex];
+    if (!player.drawnTile) return false;
     return canHuWithMelds(this.getPlayerTiles(playerIndex), player.melds.length);
   }
 

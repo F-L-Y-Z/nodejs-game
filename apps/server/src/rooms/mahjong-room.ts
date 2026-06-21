@@ -89,7 +89,7 @@ export class MahjongRoom extends Room {
     const name = requireString(options.name, auth.displayName, 24);
     const restoringSeat = this.table.hasHuman(auth.userId);
     const previousSessionId = this.activeSessionIdByUserId.get(auth.userId);
-    const seat = this.table.addHuman(auth.userId, auth.userId, name);
+    const seat = this.table.addHuman(auth.userId, auth.userId, name, auth.avatarUrl || '');
     if (seat === null) {
       client.leave(4400, '房间已满。');
       return;
