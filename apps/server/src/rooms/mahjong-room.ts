@@ -1,17 +1,10 @@
-import type { Client } from 'colyseus';
-import { Room } from 'colyseus';
 import type { AuthContext } from '@repo/auth';
 import { createDevTokenVerifier } from '@repo/auth/server';
 import { readBooleanEnv } from '@repo/config';
-import {
-  CLIENT_MESSAGES,
-  SERVER_MESSAGES,
-  type JoinRoomOptions,
-  type MahjongActionMessage,
-} from '@repo/shared';
+import { CLIENT_MESSAGES, SERVER_MESSAGES, type JoinRoomOptions, type MahjongActionMessage } from '@repo/shared';
 import { requireString } from '@repo/validators';
+import { Client, CloseCode, Room } from 'colyseus';
 import { MahjongTable } from '../mahjong/mahjong-table.js';
-import { authTokenService } from '../auth/service.js';
 import { GameState } from '../schemas/game-state.js';
 
 const verifyDevToken = createDevTokenVerifier();
@@ -34,15 +27,14 @@ export class MahjongRoom extends Room {
   private password = '';
   private turnDeadlineAt: number | null = null;
 
-  onCreate(options: Record<string, unknown> = {}): void {
-    this.state = new GameState();
-    this.timeoutSeconds = normalizeTimeoutSeconds(options.timeoutSeconds);
-    this.password = normalizeString(options.password, 32);
-
-    this.onMessage(CLIENT_MESSAGES.MahjongAction, (client, message: MahjongActionMessage) => {
+  messages = {
+    [CLIENT_MESSAGES.MahjongAction]: (client: Client, message: MahjongActionMessage) => {
       const auth = this.authBySessionId.get(client.sessionId);
       if (!auth || this.activeSessionIdByUserId.get(auth.userId) !== client.sessionId) {
-        client.send(SERVER_MESSAGES.MahjongError, { code: 'account_replaced', message: '账号已在其他设备进入该房间。' });
+        client.send(SERVER_MESSAGES.MahjongError, {
+          code: 'account_replaced',
+          message: '账号已在其他设备进入该房间。',
+        });
         client.leave(4409, 'account_replaced');
         return;
       }
@@ -63,22 +55,31 @@ export class MahjongRoom extends Room {
       }
       this.broadcastSnapshots();
       this.scheduleAuto();
-    });
+    },
+  };
+
+  onCreate(options: Record<string, unknown> = {}): void {
+    this.state = new GameState();
+    this.timeoutSeconds = normalizeTimeoutSeconds(options.timeoutSeconds);
+    this.password = normalizeString(options.password, 32);
+    console.log('[mahjong] onCreated', this.timeoutSeconds, this.password);
   }
 
-  async onAuth(_client: Client, options: JoinRoomOptions = {}) {
-    try {
-      return await authTokenService.verify(options.token);
-    } catch (error) {
-      if (!allowDevTokens) {
-        throw error;
-      }
+  // async onAuth(_client: Client, options: JoinRoomOptions = {}) {
+  //   console.log('[mahjong] onAuth', options);
+  //   try {
+  //     return await authTokenService.verify(options.token);
+  //   } catch (error) {
+  //     if (!allowDevTokens) {
+  //       throw error;
+  //     }
 
-      return verifyDevToken(options.token);
-    }
-  }
+  //     return verifyDevToken(options.token);
+  //   }
+  // }
 
   onJoin(client: Client, options: JoinRoomOptions = {}, auth: AuthContext): void {
+    console.log('[mahjong] onJoin', options);
     if (this.password && this.password !== normalizeString((options as Record<string, unknown>).password, 32)) {
       client.leave(4403, 'invalid_room_password');
       return;
@@ -113,7 +114,7 @@ export class MahjongRoom extends Room {
     this.scheduleAuto();
   }
 
-  onLeave(client: Client): void {
+  onLeave(client: Client, code: CloseCode): void {
     const auth = this.authBySessionId.get(client.sessionId);
     this.authBySessionId.delete(client.sessionId);
     if (auth && this.activeSessionIdByUserId.get(auth.userId) === client.sessionId) {
@@ -128,6 +129,7 @@ export class MahjongRoom extends Room {
   }
 
   onDispose(): void {
+    console.log('[mahjong] onDispose');
     this.clearAutoTimer();
   }
 
@@ -159,14 +161,17 @@ export class MahjongRoom extends Room {
 
     this.refreshTurnDeadline(false);
     if (!this.turnDeadlineAt) return;
-    this.autoTimer = setTimeout(() => {
-      this.autoTimer = null;
-      const changed = this.table.runAutoStep(true);
-      this.syncStatus();
-      this.refreshTurnDeadline(changed);
-      if (changed) this.broadcastSnapshots();
-      this.scheduleAuto();
-    }, Math.max(0, this.turnDeadlineAt - Date.now()));
+    this.autoTimer = setTimeout(
+      () => {
+        this.autoTimer = null;
+        const changed = this.table.runAutoStep(true);
+        this.syncStatus();
+        this.refreshTurnDeadline(changed);
+        if (changed) this.broadcastSnapshots();
+        this.scheduleAuto();
+      },
+      Math.max(0, this.turnDeadlineAt - Date.now()),
+    );
   }
 
   private clearAutoTimer(): void {
@@ -212,7 +217,9 @@ export class MahjongRoom extends Room {
 
   private allPlayersReady(): boolean {
     const seats = this.table.getSeatInfos();
-    return this.table.getHumanCount() > 0 && seats.every((seat) => !seat.isHuman || this.readyUserIds.has(seat.userId || ''));
+    return (
+      this.table.getHumanCount() > 0 && seats.every((seat) => !seat.isHuman || this.readyUserIds.has(seat.userId || ''))
+    );
   }
 
   private syncStatus(): void {

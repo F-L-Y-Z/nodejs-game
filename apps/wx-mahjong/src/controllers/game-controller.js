@@ -92,9 +92,10 @@ export default class GameController {
         timeoutSeconds: this.roomOptions.timeoutSeconds || 30,
       };
       const client = this.createColyseusClient();
-      const room = this.roomId
-        ? await client.joinById(this.roomId, options)
-        : await client.create(ROOM_NAME, options);
+      const room = await client.joinOrCreate(ROOM_NAME, options, this.roomId);
+      //const room = this.roomId
+        //? await client.joinById(this.roomId, options)
+        //: await client.create(ROOM_NAME, options);
 
       this.client = client;
       this.room = room;
