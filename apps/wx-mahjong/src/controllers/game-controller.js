@@ -91,11 +91,9 @@ export default class GameController {
         password: this.roomOptions.password || '',
         timeoutSeconds: this.roomOptions.timeoutSeconds || 30,
       };
-      const client = this.createColyseusClient();
-      const room = await client.joinOrCreate(ROOM_NAME, options, this.roomId);
-      //const room = this.roomId
-        //? await client.joinById(this.roomId, options)
-        //: await client.create(ROOM_NAME, options);
+      const client = new Client(getServerBaseUrl());
+      const room = this.roomId ? await client.joinById(this.roomId, options) : await client.create(ROOM_NAME, options);
+      console.log('[wx-mahjong] multiplayer connect success', room);
 
       this.client = client;
       this.room = room;
@@ -226,12 +224,6 @@ export default class GameController {
 
   showDisconnectedError() {
     if (this.view.showError) this.view.showError('未连接到多人房间。');
-  }
-
-  // --- Internal ---
-
-  createColyseusClient() {
-    return new Client(getServerBaseUrl());
   }
 }
 

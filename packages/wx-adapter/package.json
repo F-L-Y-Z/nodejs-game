@@ -1,0 +1,19 @@
+{
+  "name": "@repo/wx-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "echo \"no build needed\"",
+    "dev": "node src/index.js",
+    "typecheck": "echo \"skip typecheck\"",
+    "clean": "echo \"clean\""
+  },
+  "dependencies": {
+    "cross-fetch": "^4.1.0"
+  }
+}

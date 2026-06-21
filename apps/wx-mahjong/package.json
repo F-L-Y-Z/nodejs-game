@@ -4,18 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game-src.js",
-    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game-src.js --watch",
+    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js",
+    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/game.js --watch",
     "typecheck": "echo \"skip typecheck\"",
-    "clean": "rm -f public/game-src.js"
+    "clean": "rm -f public/game.js"
   },
   "dependencies": {
     "@colyseus/sdk": "^0.17.26",
-    "@iro/wechat-adapter": "^1.2.6",
     "@repo/mc2d": "workspace:*",
-    "cross-fetch": "^4.1.0",
-    "url-polyfill": "^1.1.14",
-    "wechat-adapter": "^0.2.0"
+    "@repo/wx-adapter": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"
