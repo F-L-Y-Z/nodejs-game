@@ -1,0 +1,19 @@
+{
+  "name": "@repo/colyseus-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/index.js",
+    "dev": "esbuild src/index.js --bundle --format=iife --platform=browser --target=es2020 --outfile=public/index.js --watch",
+    "serve": "node server.mjs",
+    "typecheck": "echo \"skip typecheck\"",
+    "clean": "rm -f public/index.js"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.17.26"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
