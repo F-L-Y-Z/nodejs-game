@@ -48,6 +48,9 @@ importers:
       '@repo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@repo/room':
+        specifier: workspace:*
+        version: link:../../packages/room
       '@repo/server-kit':
         specifier: workspace:*
         version: link:../../packages/server-kit
@@ -98,9 +101,19 @@ importers:
 
   packages/auth:
     dependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../config
+      '@repo/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.4
 
   packages/config: {}
 
@@ -113,6 +126,12 @@ importers:
   packages/metrics: {}
 
   packages/redis: {}
+
+  packages/room:
+    dependencies:
+      '@repo/auth':
+        specifier: workspace:*
+        version: link:../auth
 
   packages/server-kit:
     dependencies:

@@ -1,4 +1,13 @@
 import type { AuthContext } from '@repo/auth';
+import {
+  ROOM_CLOSE_CODES,
+  ROOM_ERROR_CODES,
+  RoomReadyState,
+  RoomSessionRegistry,
+  type RoomStatus,
+  normalizeRoomString,
+  normalizeRoomTimeoutSeconds,
+} from '@repo/room';
 import { CLIENT_MESSAGES, SERVER_MESSAGES, type JoinRoomOptions, type MahjongActionMessage } from '@repo/shared';
 import { requireString } from '@repo/validators';
 import { Client, CloseCode, Room } from 'colyseus';
@@ -9,16 +18,13 @@ import { GameState } from './schema.js';
 const AUTO_DELAY_MS = 650;
 const DEFAULT_TIMEOUT_SECONDS = 30;
 
-type RoomStatus = 'waiting' | 'playing' | 'settling';
-
 export class MahjongRoom extends Room {
   // Colyseus limits connections here; MahjongTable still enforces 4 playable seats.
   maxClients = 8;
   private table = new MahjongTable(false);
   private autoTimer: NodeJS.Timeout | null = null;
-  private readyUserIds = new Set<string>();
-  private authBySessionId = new Map<string, AuthContext>();
-  private activeSessionIdByUserId = new Map<string, string>();
+  private readyState = new RoomReadyState();
+  private sessions = new RoomSessionRegistry<AuthContext>();
   private status: RoomStatus = 'waiting';
   private timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
   private password = '';
@@ -26,13 +32,13 @@ export class MahjongRoom extends Room {
 
   messages = {
     [CLIENT_MESSAGES.MahjongAction]: (client: Client, message: MahjongActionMessage) => {
-      const auth = this.authBySessionId.get(client.sessionId);
-      if (!auth || this.activeSessionIdByUserId.get(auth.userId) !== client.sessionId) {
+      const auth = this.sessions.getAuth(client.sessionId);
+      if (!auth || !this.sessions.isActive(client.sessionId)) {
         client.send(SERVER_MESSAGES.MahjongError, {
-          code: 'account_replaced',
+          code: ROOM_ERROR_CODES.AccountReplaced,
           message: '账号已在其他设备进入该房间。',
         });
-        client.leave(4409, 'account_replaced');
+        client.leave(ROOM_CLOSE_CODES.AccountReplaced, ROOM_ERROR_CODES.AccountReplaced);
         return;
       }
 
@@ -57,8 +63,8 @@ export class MahjongRoom extends Room {
 
   onCreate(options: Record<string, unknown> = {}): void {
     this.state = new GameState();
-    this.timeoutSeconds = normalizeTimeoutSeconds(options.timeoutSeconds);
-    this.password = normalizeString(options.password, 32);
+    this.timeoutSeconds = normalizeRoomTimeoutSeconds(options.timeoutSeconds, { defaultValue: DEFAULT_TIMEOUT_SECONDS });
+    this.password = normalizeRoomString(options.password, 32);
     console.log('[mahjong] onCreated', this.timeoutSeconds, this.password);
   }
 
@@ -69,34 +75,32 @@ export class MahjongRoom extends Room {
 
   onJoin(client: Client, options: JoinRoomOptions = {}, auth: AuthContext): void {
     console.debug('[mahjong] onJoin', options);
-    if (this.password && this.password !== normalizeString((options as Record<string, unknown>).password, 32)) {
-      client.leave(4403, 'invalid_room_password');
+    if (this.password && this.password !== normalizeRoomString((options as Record<string, unknown>).password, 32)) {
+      client.leave(ROOM_CLOSE_CODES.InvalidRoomPassword, ROOM_ERROR_CODES.InvalidRoomPassword);
       return;
     }
 
     const name = requireString(options.name, auth.displayName, 24);
     const restoringSeat = this.table.hasHuman(auth.userId);
-    const previousSessionId = this.activeSessionIdByUserId.get(auth.userId);
     const seat = this.table.addHuman(auth.userId, auth.userId, name, auth.avatarUrl || '');
     if (seat === null) {
-      client.leave(4400, '房间已满。');
+      client.leave(ROOM_CLOSE_CODES.RoomFull, '房间已满。');
       return;
     }
 
-    this.authBySessionId.set(client.sessionId, auth);
-    this.activeSessionIdByUserId.set(auth.userId, client.sessionId);
+    const { previousSessionId } = this.sessions.claim(client.sessionId, auth);
 
-    if (previousSessionId && previousSessionId !== client.sessionId) {
+    if (previousSessionId) {
       const previousClient = this.clients.find((item) => item.sessionId === previousSessionId);
       previousClient?.send(SERVER_MESSAGES.MahjongError, {
-        code: 'account_replaced',
+        code: ROOM_ERROR_CODES.AccountReplaced,
         message: '账号已在其他设备进入该房间。',
       });
-      previousClient?.leave(4409, 'account_replaced');
+      previousClient?.leave(ROOM_CLOSE_CODES.AccountReplaced, ROOM_ERROR_CODES.AccountReplaced);
     }
 
     if (!restoringSeat && (this.status === 'waiting' || this.status === 'settling')) {
-      this.readyUserIds.delete(auth.userId);
+      this.readyState.delete(auth.userId);
     }
 
     this.broadcastSnapshots();
@@ -104,11 +108,9 @@ export class MahjongRoom extends Room {
   }
 
   onLeave(client: Client, code: CloseCode): void {
-    const auth = this.authBySessionId.get(client.sessionId);
-    this.authBySessionId.delete(client.sessionId);
-    if (auth && this.activeSessionIdByUserId.get(auth.userId) === client.sessionId) {
-      this.activeSessionIdByUserId.delete(auth.userId);
-      this.readyUserIds.delete(auth.userId);
+    const { auth, wasActive } = this.sessions.release(client.sessionId);
+    if (auth && wasActive) {
+      this.readyState.delete(auth.userId);
       if (this.status === 'waiting' || this.status === 'settling') {
         this.table.removeHuman(auth.userId);
       }
@@ -127,7 +129,7 @@ export class MahjongRoom extends Room {
   }
 
   private sendSnapshot(client: Client): void {
-    const auth = this.authBySessionId.get(client.sessionId);
+    const auth = this.sessions.getAuth(client.sessionId);
     if (!auth) return;
     client.send(SERVER_MESSAGES.MahjongSnapshot, this.snapshotFor(auth.userId));
   }
@@ -178,18 +180,18 @@ export class MahjongRoom extends Room {
       if (this.status !== 'waiting' && this.status !== 'settling') {
         return { changed: false, message: '牌局进行中不能退出房间。' };
       }
-      const sessionId = this.activeSessionIdByUserId.get(userId);
+      const sessionId = this.sessions.getActiveSessionId(userId);
       if (sessionId) this.table.removeHuman(userId);
-      this.activeSessionIdByUserId.delete(userId);
-      this.readyUserIds.delete(userId);
+      this.sessions.removeUser(userId);
+      this.readyState.delete(userId);
       return { changed: true, left: true };
     }
 
     if (action === 'ready') {
       if (this.status !== 'waiting' && this.status !== 'settling') return { changed: false };
-      this.readyUserIds.add(userId);
+      this.readyState.markReady(userId);
       if (this.allPlayersReady()) {
-        this.readyUserIds.clear();
+        this.readyState.clear();
         this.status = 'playing';
         this.table.startRoundKeepingHumans();
         this.refreshTurnDeadline(true);
@@ -206,9 +208,7 @@ export class MahjongRoom extends Room {
 
   private allPlayersReady(): boolean {
     const seats = this.table.getSeatInfos();
-    return (
-      this.table.getHumanCount() > 0 && seats.every((seat) => !seat.isHuman || this.readyUserIds.has(seat.userId || ''))
-    );
+    return this.readyState.allHumanSeatsReady(seats, this.table.getHumanCount());
   }
 
   private syncStatus(): void {
@@ -216,7 +216,7 @@ export class MahjongRoom extends Room {
       const snapshot = this.table.snapshotFor(this.table.getHumanUserIds()[0] || '');
       if (snapshot.phase === 'round-over') {
         this.status = 'settling';
-        this.readyUserIds.clear();
+        this.readyState.clear();
         this.turnDeadlineAt = null;
       }
     }
@@ -237,14 +237,14 @@ export class MahjongRoom extends Room {
     const viewerSeat = this.table.getSeatByClient(userId) ?? 0;
     const seats = this.table.getSeatInfos();
     const waiting = this.status === 'waiting' || this.status === 'settling';
-    const readySeatCount = seats.filter((seat) => !seat.isHuman || this.readyUserIds.has(seat.userId || '')).length;
+    const readySeatCount = this.readyState.readySeatCount(seats);
     const players = state.players.map((player, viewSeat) => {
       const tableSeat = (viewerSeat + viewSeat) % seats.length;
       const seat = seats[tableSeat];
       return {
         ...player,
         isHuman: seat.isHuman,
-        isReady: !waiting || !seat.isHuman || this.readyUserIds.has(seat.userId || ''),
+        isReady: !waiting || !seat.isHuman || this.readyState.has(seat.userId || ''),
       };
     });
 
@@ -263,22 +263,12 @@ export class MahjongRoom extends Room {
         timeoutSeconds: this.timeoutSeconds,
         hasPassword: Boolean(this.password),
       },
-      actions: waiting ? { ready: !this.readyUserIds.has(userId), leave: true } : state.actions,
+      actions: waiting ? { ready: !this.readyState.has(userId), leave: true } : state.actions,
       message: waiting
-        ? this.readyUserIds.has(userId)
+        ? this.readyState.has(userId)
           ? `已准备，等待其他玩家。(${readySeatCount}/${seats.length})`
           : `等待所有玩家准备。(${readySeatCount}/${seats.length})`
         : state.message,
     };
   }
-}
-
-function normalizeString(value: unknown, maxLength: number): string {
-  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
-}
-
-function normalizeTimeoutSeconds(value: unknown): number {
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) return DEFAULT_TIMEOUT_SECONDS;
-  return Math.max(5, Math.min(120, Math.round(numberValue)));
 }

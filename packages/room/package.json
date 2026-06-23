@@ -1,5 +1,5 @@
 {
-  "name": "@repo/auth",
+  "name": "@repo/room",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "import": "./dist/server.js"
     }
   },
   "scripts": {
@@ -19,11 +15,6 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@repo/config": "workspace:*",
-    "@repo/logger": "workspace:*",
-    "@repo/shared": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^25.9.3"
+    "@repo/auth": "workspace:*"
   }
 }

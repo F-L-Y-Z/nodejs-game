@@ -1,8 +1,8 @@
-import type { AuthContext, TokenVerifier } from '@repo/auth';
-import { invalidTokenError, missingTokenError } from '@repo/auth';
 import { readNumberEnv, readStringEnv } from '@repo/config';
 import type { Logger } from '@repo/logger';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { invalidTokenError, missingTokenError } from './errors.js';
+import type { AuthContext, TokenVerifier } from './types.js';
 
 const TOKEN_PREFIX = 'game.v1';
 const DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60;

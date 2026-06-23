@@ -107,6 +107,10 @@ export async function exchangeWechatMiniGameCode(
   };
 }
 
+export function createWechatUserId(gameId: string, openid: string): string {
+  return `wechat:${gameId}:${openid}`;
+}
+
 function readWechatMiniGameConfig(gameId: string, logger: Logger): WechatMiniGameConfig {
   const appsConfig = readStringEnv('WECHAT_MINIGAME_APPS', '');
 

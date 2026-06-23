@@ -1,9 +1,13 @@
+import {
+  WechatAuthError,
+  createWechatUserId,
+  exchangeWechatMiniGameCode,
+  type AuthTokenService,
+} from '@repo/auth/server';
 import { ERROR_CODES, type ErrorResponse } from '@repo/shared';
 import type { Logger } from '@repo/logger';
 import { requireString } from '@repo/validators';
 import type { Express, Request, Response } from 'express';
-import type { AuthTokenService } from './token.js';
-import { WechatAuthError, exchangeWechatMiniGameCode } from './wechat.js';
 
 type WechatMiniGameLoginResponse = {
   ok: true;
@@ -57,7 +61,7 @@ export function registerAuthRoutes(app: Express, tokenService: AuthTokenService,
 
     try {
       const session = await exchangeWechatMiniGameCode(gameId, code, options.wechatLogger);
-      const userId = `wechat:${gameId}:${session.openid}`;
+      const userId = createWechatUserId(gameId, session.openid);
       const token = tokenService.sign({
         userId,
         displayName,
