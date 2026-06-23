@@ -1,17 +1,9 @@
 import type { AuthContext } from '@repo/auth';
-import {
-  ROOM_CLOSE_CODES,
-  ROOM_ERROR_CODES,
-  RoomReadyState,
-  RoomSessionRegistry,
-  type RoomStatus,
-  normalizeRoomString,
-  normalizeRoomTimeoutSeconds,
-} from '@repo/room';
-import { CLIENT_MESSAGES, SERVER_MESSAGES, type JoinRoomOptions, type MahjongActionMessage } from '@repo/shared';
+import { normalizeRoomString, normalizeRoomTimeoutSeconds, ROOM_CLOSE_CODES, ROOM_ERROR_CODES, RoomReadyState, RoomSessionRegistry, type RoomStatus } from '@repo/room';
+import { CLIENT_MESSAGES, type JoinRoomOptions, type MahjongActionMessage, SERVER_MESSAGES } from '@repo/shared';
 import { requireString } from '@repo/validators';
 import { Client, CloseCode, Room } from 'colyseus';
-import { authTokenService } from '../../auth/service.js';
+import { authTokenService } from '../../service.js';
 import { MahjongTable } from './mahjong-table.js';
 import { GameState } from './schema.js';
 
