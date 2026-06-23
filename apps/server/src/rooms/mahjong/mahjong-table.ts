@@ -116,9 +116,7 @@ export class MahjongTable {
   }
 
   getHumanUserIds(): string[] {
-    return this.players
-      .map((player) => player.userId)
-      .filter((userId): userId is string => Boolean(userId));
+    return this.players.map((player) => player.userId).filter((userId): userId is string => Boolean(userId));
   }
 
   getHumanCount(): number {
@@ -289,11 +287,12 @@ export class MahjongTable {
     const player = this.players[tableSeat];
     const ownSeat = viewSeat === 0;
     const revealHand = this.phase === 'round-over' && this.winner !== null;
-    const hand = ownSeat || revealHand
-      ? player.drawnTile
-        ? player.hand.concat(player.drawnTile)
-        : player.hand.slice()
-      : new Array(this.getPlayerTiles(tableSeat).length).fill('BACK');
+    const hand =
+      ownSeat || revealHand
+        ? player.drawnTile
+          ? player.hand.concat(player.drawnTile)
+          : player.hand.slice()
+        : new Array(this.getPlayerTiles(tableSeat).length).fill('BACK');
     return {
       index: viewSeat,
       name: ownSeat ? '你' : player.name,

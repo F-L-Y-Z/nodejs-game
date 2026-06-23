@@ -73,10 +73,7 @@ export function getSideMeldMaxWidth(width, metrics) {
 export function getDiscardLayout(index, width, metrics, melds = []) {
   const topMeldRows = getMeldRows(melds, width - 24).length;
   const sideMeldRows = getMeldRows(melds, getSideMeldMaxWidth(width, metrics)).length;
-  const topStartY = Math.max(
-    metrics.tableTop + (metrics.isLandscape ? 64 : 86),
-    metrics.tableTop + 6 + topMeldRows * (MELD_TILE_H + 4) + 8,
-  );
+  const topStartY = Math.max(metrics.tableTop + (metrics.isLandscape ? 64 : 86), metrics.tableTop + 6 + topMeldRows * (MELD_TILE_H + 4) + 8);
   const topEndY = metrics.centerY - 8;
   const bottomStartY = metrics.centerY + 8;
   const bottomEndY = metrics.tableBottom;
@@ -133,9 +130,7 @@ export function getActionLayout(state, width, height) {
   const maxButtonW = isLandscape ? 64 : 70;
   const buttonH = isLandscape ? 34 : 36;
   const availableW = Math.max(180, safeWidth - 24);
-  const buttonW = Math.floor(
-    clamp((availableW - Math.max(0, actions.length - 1) * gap) / actions.length, 40, maxButtonW),
-  );
+  const buttonW = Math.floor(clamp((availableW - Math.max(0, actions.length - 1) * gap) / actions.length, 40, maxButtonW));
   const totalW = actions.length * buttonW + Math.max(0, actions.length - 1) * gap;
   const startX = Math.max(12, (safeWidth - totalW) / 2);
   const preferredY = Math.min(handY - buttonH - 10, meldY - buttonH - 8);

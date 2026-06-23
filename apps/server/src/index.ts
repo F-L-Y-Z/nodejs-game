@@ -1,6 +1,6 @@
 import { listen } from '@colyseus/tools';
 import app from './app.config.js';
 
-listen(app).then(r => {
+listen(app).then((r) => {
   //
 });

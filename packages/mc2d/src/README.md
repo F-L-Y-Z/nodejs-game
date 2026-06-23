@@ -25,45 +25,38 @@ js/mc2d
 微信小游戏入口中可以直接使用 `createWeChatApp`：
 
 ```js
-import {
-  Button,
-  Container,
-  Shape,
-  Text,
-  anchor,
-  createWeChatApp
-} from './js/mc2d/index'
+import { Button, Container, Shape, Text, anchor, createWeChatApp } from './js/mc2d/index';
 
-const app = createWeChatApp({fps: 60})
+const app = createWeChatApp({ fps: 60 });
 
-const root = new Container()
-root.setLayout(anchor({anchor: 'top-left', width: '100%', height: '100%'}))
+const root = new Container();
+root.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
 
-const bg = root.addChild(new Shape({fillStyle: '#173b32'}))
-bg.setLayout(anchor({anchor: 'top-left', width: '100%', height: '100%'}))
+const bg = root.addChild(new Shape({ fillStyle: '#173b32' }));
+bg.setLayout(anchor({ anchor: 'top-left', width: '100%', height: '100%' }));
 
-const title = root.addChild(new Text('MC2D', {fontSize: 24}))
-title.setLayout(anchor({anchor: 'top', y: 24, width: '100%', height: 40}))
+const title = root.addChild(new Text('MC2D', { fontSize: 24 }));
+title.setLayout(anchor({ anchor: 'top', y: 24, width: '100%', height: 40 }));
 
-const button = root.addChild(new Button('Start'))
-button.setLayout(anchor({anchor: 'center', width: 160, height: 48}))
+const button = root.addChild(new Button('Start'));
+button.setLayout(anchor({ anchor: 'center', width: 160, height: 48 }));
 button.on('tap', () => {
-  title.text = 'Tapped'
-})
+  title.text = 'Tapped';
+});
 
-app.start(root)
+app.start(root);
 ```
 
 也可以手动注入平台和 canvas：
 
 ```js
-import {Mc2dApp, WeChatAdapter} from './js/mc2d/index'
+import { Mc2dApp, WeChatAdapter } from './js/mc2d/index';
 
 const app = new Mc2dApp({
   platform: WeChatAdapter,
   canvas: globalThis.canvas,
-  fps: 60
-})
+  fps: 60,
+});
 ```
 
 `createWeChatApp()` 的 canvas 获取顺序是：
@@ -88,20 +81,20 @@ const app = new Mc2dApp({
 常用方法：
 
 ```js
-app.start(root)      // 设置 root 并启动帧循环
-app.setRoot(root)    // 替换根节点，不改变 running 状态
-app.stop()           // 停止帧循环
-app.resize()         // 重新读取平台尺寸并重设 canvas
-app.resize(info)     // 使用传入尺寸信息重设 canvas
-app.render()         // 立即重绘
-app.destroy()        // 停止、解绑输入、清理根节点
+app.start(root); // 设置 root 并启动帧循环
+app.setRoot(root); // 替换根节点，不改变 running 状态
+app.stop(); // 停止帧循环
+app.resize(); // 重新读取平台尺寸并重设 canvas
+app.resize(info); // 使用传入尺寸信息重设 canvas
+app.render(); // 立即重绘
+app.destroy(); // 停止、解绑输入、清理根节点
 ```
 
 `Mc2dApp` 也是事件源，当前会透出微信小游戏生命周期：
 
 ```js
-app.on('show', () => {})
-app.on('hide', () => {})
+app.on('show', () => {});
+app.on('hide', () => {});
 ```
 
 `fps` 默认是 `60`。`autoRender` 默认是 `true`，表示每帧全量清屏并重绘。把 `autoRender` 设为 `false` 时，只有调用 `invalidatePaint()` 触发 `stage.requestRender()` 后才会重绘。
@@ -115,40 +108,40 @@ app.on('hide', () => {})
 基础属性：
 
 ```js
-node.x = 0
-node.y = 0
-node.width = 100
-node.height = 50
-node.scaleX = 1
-node.scaleY = 1
-node.alpha = 1
-node.visible = true
-node.touchEnabled = false
+node.x = 0;
+node.y = 0;
+node.width = 100;
+node.height = 50;
+node.scaleX = 1;
+node.scaleY = 1;
+node.alpha = 1;
+node.visible = true;
+node.touchEnabled = false;
 ```
 
 基础方法：
 
 ```js
-node.setFrame(x, y, width, height)
-node.setLayout(layout)
-node.remove()
-node.invalidateLayout()
-node.invalidatePaint()
-node.update(dt)
-node.draw(ctx)
-node.on(type, handler)
-node.off(type, handler)
+node.setFrame(x, y, width, height);
+node.setLayout(layout);
+node.remove();
+node.invalidateLayout();
+node.invalidatePaint();
+node.update(dt);
+node.draw(ctx);
+node.on(type, handler);
+node.off(type, handler);
 ```
 
 `Container` 是显示对象容器：
 
 ```js
-const panel = new Container()
-panel.addChild(child)
-panel.addChildAt(child, 0)
-panel.removeChild(child)
-panel.removeChildren()
-panel.setChildLayout(stack({direction: 'horizontal', gap: 8}))
+const panel = new Container();
+panel.addChild(child);
+panel.addChildAt(child, 0);
+panel.removeChild(child);
+panel.removeChildren();
+panel.setChildLayout(stack({ direction: 'horizontal', gap: 8 }));
 ```
 
 渲染顺序是 children 数组顺序，后添加的节点后绘制，也更优先命中输入事件。
@@ -158,23 +151,23 @@ panel.setChildLayout(stack({direction: 'horizontal', gap: 8}))
 需要复杂绘制时，继承 `Graphic` 或 `DisplayObject` 并实现 `draw(ctx)`：
 
 ```js
-import {Graphic} from '../mc2d/index'
+import { Graphic } from '../mc2d/index';
 
 class BoardGraphic extends Graphic {
   constructor() {
-    super()
-    this.state = null
+    super();
+    this.state = null;
   }
 
   setState(state) {
-    this.state = state
-    this.invalidatePaint()
+    this.state = state;
+    this.invalidatePaint();
   }
 
   draw(ctx) {
-    ctx.fillStyle = '#173b32'
-    ctx.fillRect(0, 0, this.width, this.height)
-    if (!this.state) return
+    ctx.fillStyle = '#173b32';
+    ctx.fillRect(0, 0, this.width, this.height);
+    if (!this.state) return;
     // draw game state...
   }
 }
@@ -193,9 +186,9 @@ const shape = new Shape({
   fillStyle: '#205447',
   strokeStyle: '#dce8de',
   lineWidth: 1,
-  radius: 6
-})
-shape.setLayout(anchor({anchor: 'center', width: 120, height: 48}))
+  radius: 6,
+});
+shape.setLayout(anchor({ anchor: 'center', width: 120, height: 48 }));
 ```
 
 ### Text
@@ -209,10 +202,10 @@ const label = new Text('hello\nworld', {
   fontFamily: 'Arial',
   textAlign: 'center',
   textBaseline: 'middle',
-  lineHeight: 22
-})
+  lineHeight: 22,
+});
 
-label.text = 'new text'
+label.text = 'new text';
 ```
 
 注意：当前 `Text` 不支持自动换行、富文本、描边、阴影、测量缓存和复杂字体 fallback。长文本需要业务侧自行截断或换行。
@@ -223,9 +216,9 @@ label.text = 'new text'
 
 ```js
 const sprite = new Sprite(app.assets, 'images/sprite.png', {
-  fit: 'contain'
-})
-sprite.setLayout(anchor({anchor: 'center', width: 96, height: 96}))
+  fit: 'contain',
+});
+sprite.setLayout(anchor({ anchor: 'center', width: 96, height: 96 }));
 ```
 
 图集裁剪：
@@ -236,8 +229,8 @@ const tile = new Sprite(app.assets, 'images/sprite.png', {
   sourceY: 33,
   sourceWidth: 94,
   sourceHeight: 122,
-  fit: 'stretch'
-})
+  fit: 'stretch',
+});
 ```
 
 `fit` 当前支持：
@@ -255,11 +248,11 @@ const tile = new Sprite(app.assets, 'images/sprite.png', {
 
 ```js
 const button = new Button('开始', {
-  background: {fillStyle: '#2f7df6', radius: 6},
-  label: {fillStyle: '#fff', fontSize: 15}
-})
-button.setLayout(anchor({anchor: 'bottom', y: -24, width: 120, height: 40}))
-button.on('tap', () => startGame())
+  background: { fillStyle: '#2f7df6', radius: 6 },
+  label: { fillStyle: '#fff', fontSize: 15 },
+});
+button.setLayout(anchor({ anchor: 'bottom', y: -24, width: 120, height: 40 }));
+button.on('tap', () => startGame());
 ```
 
 注意：当前按钮支持基础 pressed/disabled 样式切换，但没有内建 loading 状态。
@@ -268,10 +261,10 @@ button.on('tap', () => startGame())
 
 ```js
 const button = new Button('开始', {
-  pressed: {background: {fillStyle: '#1f5fd0'}},
-  disabled: {background: {fillStyle: '#8892a0'}}
-})
-button.setState('disabled')
+  pressed: { background: { fillStyle: '#1f5fd0' } },
+  disabled: { background: { fillStyle: '#8892a0' } },
+});
+button.setState('disabled');
 ```
 
 ### Sequence、SpriteNumber、ScrollView、LoginButton
@@ -297,13 +290,15 @@ button.setState('disabled')
 适合按锚点定位。
 
 ```js
-node.setLayout(anchor({
-  anchor: 'bottom-right',
-  x: -16,
-  y: -16,
-  width: 120,
-  height: 44
-}))
+node.setLayout(
+  anchor({
+    anchor: 'bottom-right',
+    x: -16,
+    y: -16,
+    width: 120,
+    height: 44,
+  }),
+);
 ```
 
 支持的 `anchor`：
@@ -325,12 +320,14 @@ node.setLayout(anchor({
 适合按边距定位。
 
 ```js
-node.setLayout(box({
-  left: 16,
-  right: 16,
-  top: 80,
-  height: 120
-}))
+node.setLayout(
+  box({
+    left: 16,
+    right: 16,
+    top: 80,
+    height: 120,
+  }),
+);
 ```
 
 规则：
@@ -345,13 +342,15 @@ node.setLayout(box({
 适合简单横向或纵向排列子节点。
 
 ```js
-const row = new Container()
-row.setChildLayout(stack({
-  direction: 'horizontal',
-  padding: 12,
-  gap: 8,
-  itemWidth: 80
-}))
+const row = new Container();
+row.setChildLayout(
+  stack({
+    direction: 'horizontal',
+    padding: 12,
+    gap: 8,
+    itemWidth: 80,
+  }),
+);
 ```
 
 注意：
@@ -365,12 +364,12 @@ row.setChildLayout(stack({
 输入系统使用事件模型。节点需要设置 `touchEnabled = true` 才能被命中。
 
 ```js
-const hit = new Container()
-hit.touchEnabled = true
-hit.setLayout(anchor({anchor: 'top-left', x: 20, y: 20, width: 80, height: 80}))
-hit.on('tap', event => {
-  console.log(event.x, event.y)
-})
+const hit = new Container();
+hit.touchEnabled = true;
+hit.setLayout(anchor({ anchor: 'top-left', x: 20, y: 20, width: 80, height: 80 }));
+hit.on('tap', (event) => {
+  console.log(event.x, event.y);
+});
 ```
 
 当前事件类型：
@@ -384,26 +383,26 @@ hit.on('tap', event => {
 事件对象字段：
 
 ```js
-event.type
-event.pointerId
-event.x
-event.y
-event.startX
-event.startY
-event.deltaX
-event.deltaY
-event.target
-event.currentTarget
-event.originalEvent
-event.stopPropagation()
+event.type;
+event.pointerId;
+event.x;
+event.y;
+event.startX;
+event.startY;
+event.deltaX;
+event.deltaY;
+event.target;
+event.currentTarget;
+event.originalEvent;
+event.stopPropagation();
 ```
 
 事件会从命中目标向父节点冒泡：
 
 ```js
-child.on('tap', event => {
-  event.stopPropagation()
-})
+child.on('tap', (event) => {
+  event.stopPropagation();
+});
 ```
 
 tap 判定阈值：
@@ -426,53 +425,50 @@ tap 判定阈值：
 ### 图片
 
 ```js
-const record = app.assets.image('images/sprite.png')
+const record = app.assets.image('images/sprite.png');
 
-record.status  // 'loading' | 'loaded' | 'error'
-record.image
-record.width
-record.height
-record.promise
+record.status; // 'loading' | 'loaded' | 'error'
+record.image;
+record.width;
+record.height;
+record.promise;
 ```
 
 预加载：
 
 ```js
-await app.assets.loadImage('images/sprite.png')
-await app.assets.preloadImages([
-  'images/a.png',
-  'images/b.png'
-])
+await app.assets.loadImage('images/sprite.png');
+await app.assets.preloadImages(['images/a.png', 'images/b.png']);
 ```
 
 路径 formatter：
 
 ```js
-app.assets.setPathFormatter('ui', key => `images/ui/${key}.png`)
-const button = app.assets.image('button_start', 'ui')
+app.assets.setPathFormatter('ui', (key) => `images/ui/${key}.png`);
+const button = app.assets.image('button_start', 'ui');
 ```
 
 图片加载完成后，使用 `Sprite` 会自动 `invalidatePaint()`。如果是自定义绘制类直接使用 `app.assets.image()`，需要在 `record.promise` 完成后自己触发重绘：
 
 ```js
-const record = app.assets.image('images/sprite.png')
-record.promise.then(() => this.invalidatePaint())
+const record = app.assets.image('images/sprite.png');
+record.promise.then(() => this.invalidatePaint());
 ```
 
 ### 音频
 
 ```js
-const click = app.assets.sound('audio/click.mp3')
-click.play()
+const click = app.assets.sound('audio/click.mp3');
+click.play();
 ```
 
 也可以使用 `app.audio`：
 
 ```js
-app.audio.enableSfx(true)
-app.audio.playSfx('audio/click.mp3')
-app.audio.enableBgm(true)
-app.audio.playBgm('audio/bgm.mp3')
+app.audio.enableSfx(true);
+app.audio.playSfx('audio/click.mp3');
+app.audio.enableBgm(true);
+app.audio.playBgm('audio/bgm.mp3');
 ```
 
 注意：当前封装了 BGM/SFX 开关和基础播放，不封装音量管理、播放队列、解码状态和失败重试。
@@ -482,9 +478,9 @@ app.audio.playBgm('audio/bgm.mp3')
 `CachedContainer` 用离屏 canvas 缓存自身及子节点绘制结果。
 
 ```js
-const cached = new CachedContainer()
-cached.setLayout(anchor({anchor: 'center', width: 300, height: 200}))
-cached.addChild(expensiveNode)
+const cached = new CachedContainer();
+cached.setLayout(anchor({ anchor: 'center', width: 300, height: 200 }));
+cached.addChild(expensiveNode);
 ```
 
 适用场景：
@@ -505,9 +501,9 @@ cached.addChild(expensiveNode)
 ### EventEmitter
 
 ```js
-const off = emitter.on('change', value => {})
-emitter.emit('change', 1)
-off()
+const off = emitter.on('change', (value) => {});
+emitter.emit('change', 1);
+off();
 ```
 
 支持：
@@ -521,19 +517,19 @@ off()
 ### observable
 
 ```js
-const state = observable({score: 0})
+const state = observable({ score: 0 });
 
 state.on('score', (value, oldValue) => {
-  scoreText.text = String(value)
-})
+  scoreText.text = String(value);
+});
 
-state.score += 1
+state.score += 1;
 ```
 
 也可以监听全部字段：
 
 ```js
-state.on('*', (prop, value, oldValue) => {})
+state.on('*', (prop, value, oldValue) => {});
 ```
 
 注意：当前 `observable` 只监听对象第一层属性，不递归代理嵌套对象和数组内部变更。
@@ -571,15 +567,15 @@ const MyAdapter = {
   requestAnimationFrame(handler) {},
   cancelAnimationFrame(id) {},
   bindTouch(canvas, handlers) {
-    return () => {}
+    return () => {};
   },
   getStorage(key) {},
   setStorage(key, value) {},
   removeStorage(key) {},
   getSetting(options) {},
   getUserInfo(options) {},
-  login(options) {}
-}
+  login(options) {},
+};
 ```
 
 ### 平台登录
@@ -587,7 +583,7 @@ const MyAdapter = {
 `Mc2dApp` 对 `wx.login` 提供两层封装：
 
 ```js
-const loginInfo = await app.platformLogin()
+const loginInfo = await app.platformLogin();
 ```
 
 也可以走包含授权按钮和可选后台请求的完整流程：
@@ -597,24 +593,24 @@ const result = await app.login({
   container: app.topLayer,
   forceShowButton: false,
   onShowButton(button) {
-    button.setLayout(anchor({anchor: 'center', width: 160, height: 44}))
+    button.setLayout(anchor({ anchor: 'center', width: 160, height: 44 }));
   },
   onButtonTap() {},
   requestOptions(setting, userInfo, loginInfo) {
     return {
       url: 'https://example.com/login',
       method: 'POST',
-      data: {code: loginInfo.code}
-    }
+      data: { code: loginInfo.code },
+    };
   },
   type: 'text',
-  value: '登录'
-})
+  value: '登录',
+});
 
-result.setting
-result.userInfo
-result.loginInfo
-result.response
+result.setting;
+result.userInfo;
+result.loginInfo;
+result.response;
 ```
 
 然后注入：
@@ -622,8 +618,8 @@ result.response
 ```js
 const app = new Mc2dApp({
   platform: MyAdapter,
-  canvas: myCanvas
-})
+  canvas: myCanvas,
+});
 ```
 
 ## 当前项目中的用法
@@ -631,11 +627,11 @@ const app = new Mc2dApp({
 本项目麻将入口已经迁到 MC2D：
 
 ```js
-import {createWeChatApp} from './js/mc2d/index'
-import MainView from './js/game/main-view'
+import { createWeChatApp } from './js/mc2d/index';
+import MainView from './js/game/main-view';
 
-const app = createWeChatApp({fps: 60})
-app.start(new MainView(app.assets))
+const app = createWeChatApp({ fps: 60 });
+app.start(new MainView(app.assets));
 ```
 
 棋盘绘制使用自定义 `Graphic`，手牌点击区使用透明 `Container` 作为命中区域，动作按钮使用 `Button`。

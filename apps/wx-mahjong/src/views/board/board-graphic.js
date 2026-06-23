@@ -41,12 +41,7 @@ export default class BoardGraphic extends Graphic {
     ctx.fillRect(x, y, width, height);
 
     ctx.fillStyle = '#205447';
-    ctx.fillRect(
-      x + metrics.tableLeft,
-      y + metrics.tableTop,
-      metrics.tableRight - metrics.tableLeft,
-      metrics.tableBottom - metrics.tableTop,
-    );
+    ctx.fillRect(x + metrics.tableLeft, y + metrics.tableTop, metrics.tableRight - metrics.tableLeft, metrics.tableBottom - metrics.tableTop);
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
     ctx.fillRect(x, y + metrics.handY - 8, width, height - metrics.handY + 8);
 
@@ -118,10 +113,7 @@ export default class BoardGraphic extends Graphic {
       const active = state.currentPlayer === index && state.phase !== 'round-over';
       const color = active ? '#ffd86b' : '#dce8de';
       const countdownText = active && state.turnDeadlineAt ? ` ${getRemainingSeconds(state.turnDeadlineAt)}s` : '';
-      const readyText =
-        state.roomStatus === 'waiting' || state.roomStatus === 'settling'
-          ? ` ${player.isReady ? '已准备' : '未准备'}`
-          : '';
+      const readyText = state.roomStatus === 'waiting' || state.roomStatus === 'settling' ? ` ${player.isReady ? '已准备' : '未准备'}` : '';
       const label = `${player.name}${readyText}${countdownText}`;
       if (pos === 'bottom') {
         const ax = x + Math.max(12, metrics.handX - 54);
@@ -195,15 +187,7 @@ export default class BoardGraphic extends Graphic {
     const sideMaxWidth = getSideMeldMaxWidth(width, metrics);
     drawMeldRows(ctx, state.players[2].melds, x + 12, y + metrics.tableTop + 6, topMaxWidth, spriteAsset);
     drawMeldRows(ctx, state.players[3].melds, x + 12, y + metrics.tableTop + 40, sideMaxWidth, spriteAsset);
-    drawMeldRows(
-      ctx,
-      state.players[1].melds,
-      x + width - 12 - sideMaxWidth,
-      y + metrics.tableTop + 40,
-      sideMaxWidth,
-      spriteAsset,
-      'right',
-    );
+    drawMeldRows(ctx, state.players[1].melds, x + width - 12 - sideMaxWidth, y + metrics.tableTop + 40, sideMaxWidth, spriteAsset, 'right');
 
     let mx = metrics.isLandscape ? 18 : 12;
     const actionLayout = getActionLayout(state, width, height);

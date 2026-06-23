@@ -1,6 +1,14 @@
 import type { AuthContext } from '@repo/auth';
 import { requireString } from '@repo/core';
-import { normalizeRoomString, normalizeRoomTimeoutSeconds, ROOM_CLOSE_CODES, ROOM_ERROR_CODES, RoomReadyState, RoomSessionRegistry, type RoomStatus } from '@repo/room';
+import {
+  normalizeRoomString,
+  normalizeRoomTimeoutSeconds,
+  ROOM_CLOSE_CODES,
+  ROOM_ERROR_CODES,
+  RoomReadyState,
+  RoomSessionRegistry,
+  type RoomStatus,
+} from '@repo/room';
 import { CLIENT_MESSAGES, type JoinRoomOptions, type MahjongActionMessage, SERVER_MESSAGES } from '@repo/shared';
 import { Client, CloseCode, Room } from 'colyseus';
 import { authTokenService } from '../../service.js';

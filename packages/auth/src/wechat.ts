@@ -33,11 +33,7 @@ export class WechatAuthError extends Error {
   }
 }
 
-export async function exchangeWechatMiniGameCode(
-  gameId: string,
-  code: string,
-  logger: Logger = noopLogger,
-): Promise<WechatSession> {
+export async function exchangeWechatMiniGameCode(gameId: string, code: string, logger: Logger = noopLogger): Promise<WechatSession> {
   if (readBooleanEnv('WECHAT_MINIGAME_MOCK_LOGIN', false)) {
     logger.warn('Wechat Mini Game mock login enabled.', {
       gameId,
@@ -186,8 +182,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function createMockWechatSession(gameId: string, code: string): WechatSession {
-  const normalizedGameId = gameId.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
-  const normalizedCode = code.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
+  const normalizedGameId = gameId
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(0, 32);
+  const normalizedCode = code
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(0, 32);
   const suffix = normalizedCode || String(Date.now());
 
   return {

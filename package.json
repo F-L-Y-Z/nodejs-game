@@ -7,11 +7,13 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "format": "prettier --write \"{apps,packages}/*/src/**/*\"",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean"
   },
   "dependencies": {},
   "devDependencies": {
+    "prettier": "^3.6.2",
     "turbo": "^2.6.1",
     "typescript": "^6.0.3"
   },

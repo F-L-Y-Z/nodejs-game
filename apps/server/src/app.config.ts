@@ -13,7 +13,6 @@ const server = defineServer({
   }),
 
   express: (app) => {
-
     app.use('/monitor', monitor());
 
     if (process.env.NODE_ENV !== 'production') {

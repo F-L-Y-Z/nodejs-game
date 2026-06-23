@@ -26,12 +26,7 @@ function consume(counts: Record<string, number>, tile: string, amount: number): 
   return amount - used;
 }
 
-function canMakeGroups(
-  counts: Record<string, number>,
-  wildcards: number,
-  groupsLeft: number,
-  memo: Record<string, boolean>,
-): boolean {
+function canMakeGroups(counts: Record<string, number>, wildcards: number, groupsLeft: number, memo: Record<string, boolean>): boolean {
   if (groupsLeft === 0) return countTotal(counts) === 0;
 
   const memoKey = keyOf(counts, wildcards, groupsLeft);
