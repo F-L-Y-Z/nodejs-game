@@ -1,15 +1,11 @@
 import type { AuthContext } from '@repo/auth';
-import { createDevTokenVerifier } from '@repo/auth/server';
-import { readBooleanEnv } from '@repo/config';
 import { CLIENT_MESSAGES, SERVER_MESSAGES, type JoinRoomOptions, type MahjongActionMessage } from '@repo/shared';
 import { requireString } from '@repo/validators';
 import { Client, CloseCode, Room } from 'colyseus';
-import { authTokenService } from '../auth/service.js';
-import { MahjongTable } from '../mahjong/mahjong-table.js';
-import { GameState } from '../schemas/game-state.js';
+import { authTokenService } from '../../auth/service.js';
+import { MahjongTable } from './mahjong-table.js';
+import { GameState } from './schema.js';
 
-const verifyDevToken = createDevTokenVerifier();
-const allowDevTokens = readBooleanEnv('AUTH_ALLOW_DEV_TOKENS', true);
 const AUTO_DELAY_MS = 650;
 const DEFAULT_TIMEOUT_SECONDS = 30;
 
@@ -68,15 +64,7 @@ export class MahjongRoom extends Room {
 
   async onAuth(_client: Client, options: JoinRoomOptions = {}) {
     console.debug('[mahjong] onAuth', options);
-    try {
-      return await authTokenService.verify(options.token);
-    } catch (error) {
-      if (!allowDevTokens) {
-        throw error;
-      }
-
-      return verifyDevToken(options.token);
-    }
+    return await authTokenService.verify(options.token);
   }
 
   onJoin(client: Client, options: JoinRoomOptions = {}, auth: AuthContext): void {

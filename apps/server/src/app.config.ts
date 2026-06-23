@@ -1,6 +1,6 @@
 import { ROOM_NAMES } from '@repo/shared';
 import { defineRoom, defineServer, monitor, playground } from 'colyseus';
-import { MahjongRoom } from './rooms/mahjong-room.js';
+import { MahjongRoom } from './rooms/mahjong/index.js';
 
 const server = defineServer({
   rooms: {
