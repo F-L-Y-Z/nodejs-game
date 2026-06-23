@@ -1,6 +1,4 @@
-import { readBooleanEnv, readStringEnv } from '@repo/config';
-import type { Logger } from '@repo/logger';
-import { noopLogger } from '@repo/logger';
+import { noopLogger, readBooleanEnv, readStringEnv, type Logger } from '@repo/core';
 
 const WECHAT_CODE_TO_SESSION_URL = 'https://api.weixin.qq.com/sns/jscode2session';
 

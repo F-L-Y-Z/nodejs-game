@@ -1,5 +1,4 @@
-import { readNumberEnv, readStringEnv } from '@repo/config';
-import type { Logger } from '@repo/logger';
+import { readNumberEnv, readStringEnv, type Logger } from '@repo/core';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { invalidTokenError, missingTokenError } from './errors.js';
 import type { AuthContext, TokenVerifier } from './types.js';

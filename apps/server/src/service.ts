@@ -1,5 +1,5 @@
 import { createAuthTokenService } from '@repo/auth/server';
-import { createConsoleLogger } from '@repo/logger';
+import { createConsoleLogger } from '@repo/core';
 import { SERVICE_NAME } from '@repo/shared';
 
 

@@ -19,8 +19,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@repo/config": "workspace:*",
-    "@repo/logger": "workspace:*",
+    "@repo/core": "workspace:*",
     "@repo/shared": "workspace:*"
   },
   "devDependencies": {

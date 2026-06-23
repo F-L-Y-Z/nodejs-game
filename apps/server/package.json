@@ -16,12 +16,9 @@
     "@colyseus/tools": "^0.17.19",
     "@colyseus/ws-transport": "^0.17.13",
     "@repo/auth": "workspace:*",
-    "@repo/config": "workspace:*",
-    "@repo/logger": "workspace:*",
+    "@repo/core": "workspace:*",
     "@repo/room": "workspace:*",
-    "@repo/server-kit": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@repo/validators": "workspace:*",
     "colyseus": "^0.17.10",
     "cors": "^2.8.6",
     "express": "^5.2.1"

@@ -24,14 +24,9 @@ apps/
 
 packages/
   shared/           纯共享协议和类型
-  validators/       运行时校验工具
-  auth/             鉴权类型和服务端鉴权边界
-  server-kit/       Express/Colyseus 服务端通用工具
-  config/           环境变量和配置解析
-  logger/           日志接口和默认实现
-  metrics/          指标接口和 no-op 实现
-  db/               数据库抽象边界
-  redis/            Redis 抽象边界
+  core/             配置、日志、指标、校验、health、shutdown 等基础运行库
+  auth/             鉴权类型、token 和微信登录
+  room/             多人房间会话、准备状态和通用房间错误
 ```
 
 ## 分层原则
@@ -49,8 +44,11 @@ packages/auth
   -> 可导出跨端类型
   -> 服务端鉴权实现放在 server 子路径
 
-packages/server-kit
-  -> 服务端专用
+packages/core
+  -> 基础运行库，不放业务协议、具体游戏规则或认证流程
+
+packages/room
+  -> 房间通用能力，不依赖 Colyseus 具体 Room 子类
 ```
 
 不允许出现：
@@ -146,15 +144,27 @@ JWT 校验
 Redis 调用
 ```
 
-### validators
+### core
 
-提供轻量运行时校验工具。后续可以替换或接入 zod/valibot，但当前先避免新增外部依赖。
+基础运行库，包含：
+
+```txt
+环境变量读取
+日志接口和默认 console 实现
+指标接口和 no-op 实现
+轻量运行时校验工具
+健康检查响应
+Express health route
+进程关闭处理
+```
+
+不放游戏协议、具体游戏规则、微信登录流程、数据库 repository 或 Redis 具体实现。
 
 ### auth
 
-提供鉴权相关的类型、错误和服务端鉴权边界。
+提供鉴权相关的类型、错误和服务端鉴权能力。
 
-当前实现是基础版 token verifier，后续可以在不影响 Room 调用方式的情况下替换为：
+当前实现包含 token 签发/校验和微信小游戏 code exchange。后续可以在不影响 Room 调用方式的情况下替换或扩展为：
 
 ```txt
 JWT
@@ -164,36 +174,19 @@ Session 服务
 客户端版本检查
 ```
 
-### server-kit
+### room
 
-服务端通用工具：
+多人房间通用能力：
 
 ```txt
-健康检查响应
-Express health route
-进程关闭处理
-Colyseus 房间名注册辅助
+房间会话归属
+同账号顶号
+准备状态
+房间参数标准化
+通用房间错误码/关闭码
 ```
 
-### config
-
-环境变量读取、数字/布尔解析、必填项校验。
-
-### logger
-
-提供统一日志接口。业务代码依赖接口，不直接绑定具体日志库。
-
-### metrics
-
-提供指标接口。默认 no-op，生产环境可替换为 Prometheus/OpenTelemetry。
-
-### db
-
-定义数据库连接和 repository 边界，不绑定具体 ORM。
-
-### redis
-
-定义缓存、发布订阅、分布式锁等边界，不绑定具体 Redis 客户端。
+具体 Colyseus Room 子类、游戏规则和业务快照仍保留在 `apps/server`。
 
 ## 推荐演进路径
 
@@ -201,24 +194,22 @@ Colyseus 房间名注册辅助
 
 ```txt
 shared      协议和错误码
-validators  运行时校验
-auth        onAuth 准入校验
-server-kit  health/env/shutdown
+core        config/logger/metrics/validators/health/shutdown
+auth        token 和微信登录
+room        会话归属、ready 状态、房间通用错误
 ```
 
 第二阶段：
 
 ```txt
-logger      统一日志
-metrics     统一指标
-config      配置 schema
+auth        账号状态、封禁、客户端版本检查
+room        房间过期清理、重连策略、房间索引
 ```
 
 第三阶段：
 
 ```txt
-db          repository 和事务边界
-redis       presence、限流、分布式锁、缓存
+按真实实现再拆 repository、Redis presence、限流、分布式锁、缓存等边界
 ```
 
 核心原则：先定义稳定边界，再接具体技术选型。

@@ -42,24 +42,15 @@ importers:
       '@repo/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@repo/config':
+      '@repo/core':
         specifier: workspace:*
-        version: link:../../packages/config
-      '@repo/logger':
-        specifier: workspace:*
-        version: link:../../packages/logger
+        version: link:../../packages/core
       '@repo/room':
         specifier: workspace:*
         version: link:../../packages/room
-      '@repo/server-kit':
-        specifier: workspace:*
-        version: link:../../packages/server-kit
       '@repo/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@repo/validators':
-        specifier: workspace:*
-        version: link:../../packages/validators
       colyseus:
         specifier: ^0.17.10
         version: 0.17.10(@colyseus/auth@0.17.9(@colyseus/core@0.17.43)(express@5.2.1))(@colyseus/better-call@1.3.3)(@colyseus/core@0.17.43)(@colyseus/redis-driver@0.17.7(@colyseus/better-call@1.3.3)(@colyseus/schema@4.0.26(typescript@6.0.3))(@colyseus/ws-transport@0.17.13)(@pm2/io@6.1.0)(express@5.2.1))(@colyseus/redis-presence@0.17.7(@colyseus/better-call@1.3.3)(@colyseus/schema@4.0.26(typescript@6.0.3))(@colyseus/ws-transport@0.17.13)(@pm2/io@6.1.0)(express@5.2.1))(@colyseus/schema@4.0.26(typescript@6.0.3))(@colyseus/uwebsockets-transport@0.17.20(@colyseus/core@0.17.43))(@colyseus/ws-transport@0.17.13)(@pm2/io@6.1.0)(express@5.2.1)
@@ -101,12 +92,9 @@ importers:
 
   packages/auth:
     dependencies:
-      '@repo/config':
+      '@repo/core':
         specifier: workspace:*
-        version: link:../config
-      '@repo/logger':
-        specifier: workspace:*
-        version: link:../logger
+        version: link:../core
       '@repo/shared':
         specifier: workspace:*
         version: link:../shared
@@ -115,17 +103,13 @@ importers:
         specifier: ^25.9.3
         version: 25.9.4
 
-  packages/config: {}
-
-  packages/db: {}
-
-  packages/logger: {}
+  packages/core:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/mc2d: {}
-
-  packages/metrics: {}
-
-  packages/redis: {}
 
   packages/room:
     dependencies:
@@ -133,18 +117,7 @@ importers:
         specifier: workspace:*
         version: link:../auth
 
-  packages/server-kit:
-    dependencies:
-      '@repo/shared':
-        specifier: workspace:*
-        version: link:../shared
-      express:
-        specifier: '>=5'
-        version: 5.2.1
-
   packages/shared: {}
-
-  packages/validators: {}
 
   packages/wx-adapter:
     dependencies:

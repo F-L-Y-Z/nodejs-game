@@ -11,11 +11,9 @@ apps/
 
 packages/
   shared/        跨端协议、房间名、消息名、payload 类型
-  auth/          鉴权类型和服务端 token 校验边界
-  config/        环境变量解析
-  logger/        日志接口
-  server-kit/    服务端通用 Express/Colyseus 辅助
-  validators/    运行时校验工具
+  core/          配置、日志、指标、校验、health、shutdown 等基础运行库
+  auth/          鉴权类型、token、微信登录等认证能力
+  room/          多人房间会话、准备状态、房间参数和错误码
 ```
 
 依赖方向保持为 `apps/* -> packages/*`。`packages` 不依赖具体业务应用；麻将规则、房间生命周期和 AI 陪玩属于业务代码，保留在 `apps/server`。
@@ -48,7 +46,8 @@ apps/wx-mahjong/src/network/colyseus-client.js
 ## 分层整理原则
 
 - 放入 `packages/shared`：房间名、消息名、跨端 payload 类型、通用错误码。
-- 放入 `packages/auth`：鉴权上下文类型、token 校验边界。
-- 放入 `packages/server-kit`：健康检查、服务启动、关闭处理等服务端通用能力。
+- 放入 `packages/core`：配置读取、日志接口、指标 no-op、运行时校验、健康检查、关闭处理等基础能力。
+- 放入 `packages/auth`：鉴权上下文类型、token 签发/校验、微信登录 code exchange。
+- 放入 `packages/room`：房间会话归属、同账号顶号、准备状态、房间参数标准化、通用错误码。
 - 保留在 `apps/server`：麻将规则、AI 操作、房间生命周期、Colyseus Room 编排。
 - 保留在 `apps/wx-mahjong`：小游戏渲染、输入、登录态缓存、客户端连接适配。

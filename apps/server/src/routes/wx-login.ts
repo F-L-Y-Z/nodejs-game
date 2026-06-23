@@ -1,7 +1,6 @@
 import { createWechatUserId, exchangeWechatMiniGameCode, WechatAuthError } from '@repo/auth/server';
-import { createConsoleLogger } from '@repo/logger';
+import { createConsoleLogger, requireString } from '@repo/core';
 import { ERROR_CODES, type ErrorResponse, SERVICE_NAME } from '@repo/shared';
-import { requireString } from '@repo/validators';
 import { createEndpoint } from 'colyseus';
 import { authTokenService } from '../service.js';
 
