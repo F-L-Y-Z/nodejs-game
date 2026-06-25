@@ -21,7 +21,7 @@ export default class LoginView extends Container {
         textAlign: 'center',
       }),
     );
-    this.title.setLayout(anchor({ anchor: 'top', y: 120, width: 240, height: 44 }));
+    this.title.setLayout(anchor({ anchor: 'top', y: 100, width: 240, height: 44 }));
 
     this.statusText = this.addChild(
       new Text(this.initialMessage, {
@@ -31,7 +31,7 @@ export default class LoginView extends Container {
         maxLines: 2,
       }),
     );
-    this.statusText.setLayout(anchor({ anchor: 'top', y: 176, width: 260, height: 48 }));
+    this.statusText.setLayout(anchor({ anchor: 'top', y: 156, width: 260, height: 48 }));
 
     this.retryButton = this.addChild(
       new Button('重试', {
@@ -39,7 +39,7 @@ export default class LoginView extends Container {
         label: { fillStyle: '#fff', fontSize: 16 },
       }),
     );
-    this.retryButton.setLayout(anchor({ anchor: 'top', y: 246, width: 150, height: 42 }));
+    this.retryButton.setLayout(anchor({ anchor: 'top', y: 226, width: 150, height: 42 }));
     this.retryButton.visible = false;
     this.retryButton.on('tap', () => this.startLogin(true));
   }
@@ -67,7 +67,7 @@ export default class LoginView extends Container {
           lineHeight: 44,
         },
         onShowButton: (button) => {
-          button.setLayout(anchor({ anchor: 'top', y: 246, width: 150, height: 44 }));
+          button.setLayout(anchor({ anchor: 'top', y: 226, width: 150, height: 44 }));
         },
       });
 

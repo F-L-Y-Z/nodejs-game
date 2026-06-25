@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.5.3",
   "scripts": {
+    "start": "nohup pnpm --filter @repo/server run start > output.log 2>&1 &",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "format": "prettier --write \"{apps,packages}/*/src/**/*\"",

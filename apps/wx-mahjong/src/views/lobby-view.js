@@ -23,7 +23,7 @@ export default class LobbyView extends Container {
         textAlign: 'center',
       }),
     );
-    this.title.setLayout(anchor({ anchor: 'top', y: 108, width: 240, height: 44 }));
+    this.title.setLayout(anchor({ anchor: 'top', y: 80, width: 240, height: 44 }));
 
     this.statusText = this.addChild(
       new Text(this.status, {
@@ -34,7 +34,7 @@ export default class LobbyView extends Container {
         textAlign: 'center',
       }),
     );
-    this.statusText.setLayout(anchor({ anchor: 'top', y: 168, width: 280, height: 70 }));
+    this.statusText.setLayout(anchor({ anchor: 'top', y: 128, width: 280, height: 70 }));
 
     this.createButton = this.addChild(
       new Button('创建房间', {
@@ -42,7 +42,7 @@ export default class LobbyView extends Container {
         label: { fillStyle: '#fff', fontSize: 16 },
       }),
     );
-    this.createButton.setLayout(anchor({ anchor: 'top', y: 260, width: 170, height: 44 }));
+    this.createButton.setLayout(anchor({ anchor: 'top', y: 200, width: 150, height: 35 }));
     this.createButton.on('tap', () => this.handleCreate());
 
     this.joinButton = this.addChild(
@@ -51,7 +51,7 @@ export default class LobbyView extends Container {
         label: { fillStyle: '#173b32', fontSize: 16 },
       }),
     );
-    this.joinButton.setLayout(anchor({ anchor: 'top', y: 320, width: 170, height: 44 }));
+    this.joinButton.setLayout(anchor({ anchor: 'top', y: 250, width: 150, height: 35 }));
     this.joinButton.on('tap', () => this.handleJoin());
 
     this.reloginButton = this.addChild(
@@ -60,7 +60,7 @@ export default class LobbyView extends Container {
         label: { fillStyle: '#f9f2dc', fontSize: 15 },
       }),
     );
-    this.reloginButton.setLayout(anchor({ anchor: 'top', y: 382, width: 170, height: 40 }));
+    this.reloginButton.setLayout(anchor({ anchor: 'top', y: 300, width: 150, height: 35 }));
     this.reloginButton.on('tap', () => this.handleRelogin());
   }
 
