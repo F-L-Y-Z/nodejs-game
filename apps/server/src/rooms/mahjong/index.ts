@@ -13,6 +13,7 @@ import { CLIENT_MESSAGES, type JoinRoomOptions, type MahjongActionMessage, SERVE
 import { Client, CloseCode, Room } from 'colyseus';
 import { authTokenService } from '../../service.js';
 import { MahjongTable } from './mahjong-table.js';
+import { createUniqueMahjongRoomId, releaseMahjongRoomId } from './room-id.js';
 import { GameState } from './schema.js';
 
 const AUTO_DELAY_MS = 650;
@@ -62,10 +63,11 @@ export class MahjongRoom extends Room {
   };
 
   onCreate(options: Record<string, unknown> = {}): void {
+    this.roomId = createUniqueMahjongRoomId();
     this.state = new GameState();
     this.timeoutSeconds = normalizeRoomTimeoutSeconds(options.timeoutSeconds, { defaultValue: DEFAULT_TIMEOUT_SECONDS });
     this.password = normalizeRoomString(options.password, 32);
-    console.log('[mahjong] onCreated', this.timeoutSeconds, this.password);
+    console.log('[mahjong] onCreated', this.roomId, this.timeoutSeconds, this.password);
   }
 
   async onAuth(_client: Client, options: JoinRoomOptions = {}) {
@@ -121,6 +123,7 @@ export class MahjongRoom extends Room {
 
   onDispose(): void {
     console.log('[mahjong] onDispose');
+    releaseMahjongRoomId(this.roomId);
     this.clearAutoTimer();
   }
 
